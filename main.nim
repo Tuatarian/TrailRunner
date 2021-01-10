@@ -6,10 +6,15 @@ type
         pos : Vector2
         gridpos : Vector2
 
-proc movePlayer(p : player) : Vector2 =
+proc movePlayer(plr : player) : Vector2 =
     if IsKeyDown(KEY_A or KEY_LEFT):
         result.x += -1.float32
-
+    elif IsKeyDown(KEY_D or KEY_RIGHT):
+        result.x += 1.float32
+    elif IsKeyDown(KEY_W or KEY_UP):
+        result.y += -1.float32
+    elif IsKeyDown(KEY_S or KEY_DOWN):
+        result.y += 1.float32
 
 const
     screenHeight = 720
@@ -18,24 +23,6 @@ const
     screencenter = makevec2(screenWidth / 2, screenHeight / 2)
 
 InitWindow(screenWidth, screenHeight, "BgGen")
-
-SetTargetFPS 60
-
-var
-    verts : seq[Vector2]
-    xcoords : seq[float]
-    ycoords : seq[float]
-
-for x in 0..10:
-    xcoords.add(screenWidth / 11)
-
-for y in 0..8:
-    ycoords.add(screenHeight / 930)
-
-for x in xcoords:
-    for y in ycoords:
-        verts.add(makevec2(x, y))
-
 SetTargetFPS 75
 
 while not WindowShouldClose():
