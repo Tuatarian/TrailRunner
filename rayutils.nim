@@ -1,11 +1,17 @@
 import raylib, math
 
-const colorArr* : array[25, Color]= [LIGHTGRAY, GRAY, DARKGRAY, YELLOW, GOLD, ORANGE, PINK, RED, MAROON, GREEN, LIME, DARKGREEN, SKYBLUE, BLUE, DARKBLUE, PURPLE, VIOLET, DARKPURPLE, BEIGE, BROWN, DARKBROWN, WHITE, BLACK, MAGENTA, RAYWHITE]
+const colorArr* : array[25, Color] = [LIGHTGRAY, GRAY, DARKGRAY, YELLOW, GOLD, ORANGE, PINK, RED, MAROON, GREEN, LIME, DARKGREEN, SKYBLUE, BLUE, DARKBLUE, PURPLE, VIOLET, DARKPURPLE, BEIGE, BROWN, DARKBROWN, WHITE, BLACK, MAGENTA, RAYWHITE]
 
 func grEqCeil*(n : int | float | float32) : int | float | float32 =
     if n == n.int.float:
         return n
     return ceil(n)
+
+proc drawTexCentered*(tex : Texture, pos : Vector2, tint : Color) =
+    DrawTexture(tex, int pos.x + (64 - tex.width) / 2, int pos.y + (64 - tex.height) / 2, tint)
+
+proc drawTexCentered*(tex : Texture, posx, posy : int | float | float32, tint : Color) =
+    DrawTexture(tex, int posx + (64 - tex.width) / 2, int posy + (64 - tex.height) / 2, tint)
 
 func reflect*(i, tp : int | float) : int | float =
     return tp - i + tp
