@@ -2,6 +2,10 @@ import raylib, math
 
 const colorArr* : array[25, Color]= [LIGHTGRAY, GRAY, DARKGRAY, YELLOW, GOLD, ORANGE, PINK, RED, MAROON, GREEN, LIME, DARKGREEN, SKYBLUE, BLUE, DARKBLUE, PURPLE, VIOLET, DARKPURPLE, BEIGE, BROWN, DARKBROWN, WHITE, BLACK, MAGENTA, RAYWHITE]
 
+func grEqCeil*(n : int | float | float32) : int | float | float32 =
+    if n == n.int.float:
+        return n
+    return ceil(n)
 
 func reflect*(i, tp : int | float) : int | float =
     return tp - i + tp
