@@ -1,4 +1,7 @@
-import raylib, os, lenientops, rayutils, math
+import raylib, os, lenientops, rayutils, math, random
+
+randomize()
+
 type
     Player = object
         pos : Vector2
@@ -18,21 +21,33 @@ proc drawTexFromGrid(tex : Texture, pos : Vector2, tilesize : int) =
     DrawTexture(tex, int pos.x * tilesize, int pos.y * tilesize, WHITE)
 
 proc drawTexCenteredFromGrid(tex : Texture, pos : Vector2, tilesize : int, tint : Color) =
-    DrawTexture(tex, int pos.x + (tilesize - tex.width) / 2, int pos.y + (tilesize - tex.height) / 2, tint)
+    DrawTexture(tex, int pos.x * tilesize + (tilesize - tex.width) / 2, int pos.y * tilesize + (tilesize - tex.height) / 2, tint)
 
     # ----------------------------- #
     #       Player Management       #
     # ----------------------------- #
 
-proc movePlayer(plr : Player) : Vector2 =
-    if IsKeyDown(KEY_A or KEY_LEFT):
-        result.x += -1.float32
-    elif IsKeyDown(KEY_D or KEY_RIGHT):
-        result.x += 1.float32
-    elif IsKeyDown(KEY_W or KEY_UP):
-        result.y += -1.float32
-    elif IsKeyDown(KEY_S or KEY_DOWN):
-        result.y += 1.float32
+proc movePlayer(plr : var Player, lfkey : KeyboardKey) : KeyboardKey =
+    if IsKeyDown(KEY_A) or IsKeyDown(KEY_LEFT):
+        if lfkey == KEY_LEFT:
+            return KEY_LEFT
+        plr.pos.x += -1
+        return KEY_LEFT
+    elif IsKeyDown(KEY_D) or IsKeyDown(KEY_RIGHT):
+        if lfkey == KEY_RIGHT:
+            return KEY_RIGHT
+        plr.pos.x += 1
+        return KEY_RIGHT
+    elif IsKeyDown(KEY_W) or IsKeyDown(KEY_UP):
+        if lfkey == KEY_UP:
+            return KEY_UP
+        plr.pos.y += -1
+        return KEY_UP
+    elif IsKeyDown(KEY_S) or IsKeyDown(KEY_DOWN):
+        if lfkey == KEY_DOWN:
+            return KEY_DOWN
+        plr.pos.y += 1
+        return KEY_DOWN
 
     # -------------------------- #
     #       Map Management       #
@@ -69,14 +84,9 @@ for i in maps[0]:
 
 
 const
-    tilesize = 64
+    tilesize = 96
     screenHeight = 768
-    screenWidth = 1280
-    screenvec = makevec2(screenWidth, screenHeight)
-    numHoriTiles = 1280 / tilesize
-    numVertiTiles = 720 / tilesize
-    numTilesVec = makevec2(numHoriTiles, numVertiTiles)
-    screencenter = makevec2(screenWidth / 2, screenHeight / 2)
+    screenWidth = 1248
 
 InitWindow screenWidth, screenHeight, "TrailRun"
 SetTargetFPS 75
@@ -87,12 +97,14 @@ let
 
 var
     plr = Player(pos : makevec2(0, 0))
+    lastframekey = KEY_F
 
 
 while not WindowShouldClose():
     ClearBackground RAYWHITE
 
-    plr.pos = movePlayer plr
+    lastframekey = movePlayer(plr, lastframekey)
+    echo plr.pos
 
 
     # ---------------- #
@@ -106,7 +118,7 @@ while not WindowShouldClose():
     #         DrawTexture tidleTexArray[0], i * 64, j * 64, WHITE 
 
     renderMap maps[0], tileTexArray, tilesize
-    drawTexCenteredFromGrid playertex, plr.pos
+    drawTexCenteredFromGrid playertex, plr.pos, tilesize, WHITE
     EndDrawing()
 
 for tex in tileTexArray:
