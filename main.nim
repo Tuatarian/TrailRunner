@@ -71,7 +71,7 @@ func parseMapTile(c : char) : int =
     if c == '-': return 0
     if c == '#': return 1
 
-func parseMapEntity(c : char) : int =
+func parseEmapTile(c : char) : int =
     if c == '-': return 0
     if c == '#': return 1
     if c == '*': return 2
@@ -99,14 +99,16 @@ for file in walkDir("assets/maps/levelmaps"):
         lcount += 1
     fcount += 1
 
-var emaps : seq[seq[int]]
+var emaps : seq[seq[seq[int]]]
 fcount = 0
 for file in walkDir("assets/maps/"):
     emaps.add @[]
     var lcount = 0
     for line in file[1].lines:
-        maps[fcount].add @[]
-        for c in line
+        emaps[fcount].add @[]
+        for c in line:
+            emaps[fcount][lcount].add parseMapTile c
+            lcount += 1
 
 
 
