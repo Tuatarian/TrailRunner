@@ -2,16 +2,26 @@ import raylib, math
 
 const colorArr* : array[25, Color] = [LIGHTGRAY, GRAY, DARKGRAY, YELLOW, GOLD, ORANGE, PINK, RED, MAROON, GREEN, LIME, DARKGREEN, SKYBLUE, BLUE, DARKBLUE, PURPLE, VIOLET, DARKPURPLE, BEIGE, BROWN, DARKBROWN, WHITE, BLACK, MAGENTA, RAYWHITE]
 
+func makevec2*(x, y: float | float32 | int) : Vector2 =
+    result.x = float x
+    result.y = float y
+
+func clamp*(v, v2 : Vector2) : Vector2 =
+    return makevec2(min(v.x, v2.x), min(v.y, v2.y))
+
+func antiClamp*(v, v2 : Vector2) : Vector2 =
+    return makevec2(max(v.x, v2.x), max(v.y, v2.y))
+
 func grEqCeil*(n : int | float | float32) : int | float | float32 =
     if n == n.int.float:
         return n
     return ceil(n)
 
-proc drawTexCentered*(tex : Texture, pos : Vector2, tint : Color) =
-    DrawTexture(tex, int pos.x + (64 - tex.width) / 2, int pos.y + (64 - tex.height) / 2, tint)
+proc drawTexCentered*(tex : Texture2D, pos : Vector2, tint : Color) =
+    tex.DrawTexture(int pos.x + tex.width / 2, int pos.y + tex.height / 2, tint)
 
-proc drawTexCentered*(tex : Texture, posx, posy : int | float | float32, tint : Color) =
-    DrawTexture(tex, int posx + (64 - tex.width) / 2, int posy + (64 - tex.height) / 2, tint)
+proc drawTexCentered*(tex : Texture2D, posx, posy : int | float | float32, tint : Color) =
+    tex.DrawTexture(int posx + tex.width / 2, int posy + tex.height / 2, tint)
 
 func reflect*(i, tp : int | float) : int | float =
     return tp - i + tp
@@ -23,6 +33,17 @@ func `+`*(v, v2 : Vector2) : Vector2 =
 func `-`*(v, v2 : Vector2) : Vector2 =
     result.x = v.x - v2.x
     result.y = v.y - v2.y
+
+func `+`*[T](v : Vector2, n : T) : Vector2 =
+    result.x = v.x + n
+    result.y = v.y + n
+
+func `-`*[T](v : Vector2, n : T) : Vector2 =
+    result.x = v.x - n
+    result.y = v.y - n
+
+func `+=`*[T](v : var Vector2, t : T) =
+    v = v + t
 
 func `/`*(v, v2 : Vector2) : Vector2 =
     result.x = v.x / v2.x
@@ -36,13 +57,12 @@ func `div`*(v, : Vector2, f : float) : Vector2 =
     result.x = ceil(v.x / f)
     result.y = ceil(v.y / f)
 
+func `mod`*(v, v2 : Vector2) : Vector2 =
+    return makevec2(v.x mod v2.x, v.y mod v2.y)
+
 func `*`*(v, v2 : Vector2) : Vector2 =
     result.x = v.x * v2.x
     result.y = v.y * v2.y
-
-func makevec2*(x, y: float | float32 | int) : Vector2 =
-    result.x = float x
-    result.y = float y
 
 func cart2Polar*(v : Vector2, c = Vector2(x : 0, y : 0)) : Vector2 =
     let v = v - c
@@ -98,3 +118,6 @@ proc drawTriangleFan*(verts : openArray[Vector2], color : Color) =
                     swap(polarpoints[k], polarpoints[k + 1])
                     swap(points[k], points[k + 1])
         DrawTriangle(points[0], points[1], points[2], color)
+
+func normalize*(v : Vector2) : Vector2 =
+    return v / sqrt v.x ^ 2 + v.y ^ 2
