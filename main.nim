@@ -1,12 +1,11 @@
-import raylib, os, lenientops, rayutils, math
+import raylib, os, lenientops, rayutils, math, strformat
 
 type
     Player = object
         pos : Vector2
-        screenpos : Vector2
         npos : Vector2
-        nscreenpos : Vector2
         sprite : Texture2D
+        canMove : bool
 
     # --------------------------- #
     #       Grid Management       #
@@ -76,40 +75,41 @@ func parseEmapTile(c : char) : int =
     if c == '#': return 1
     if c == '*': return 2
 
-
 proc renderMap(map : seq[seq[int]], tileTexArray : openArray[Texture], tilesize : int) =
     for i in 0..<map.len:
         for j in 0..<map[i].len:
             if map[i][j] != 0:
                 drawTexFromGrid(tileTexArray[map[i][j] - 1], makevec2(j, i), tilesize)
 
+proc findFromEmap(map : seq[seq[int]]) : (Vector2, seq[Vector2]) =
+    for i in 0..<map.len:
+        for j in 0..<map[i].len:
+            if map[i][j] != 0:
+                if map[i][j] == 1: result[0] = makevec2(j, i)
+                if map[i][j] == 2: result[1].add makevec2(j, i)
+
+                
+
+
     # ----------------------- #
     #       Import Maps       #
     # ----------------------- #
 
-var maps : seq[seq[seq[int]]]
-var fcount = 0
-for file in walkDir("assets/maps/levelmaps"):
-    maps.add @[]
+proc loadMap(lvl : int) : seq[seq[int]] =
     var lcount = 0
-    for line in file[1].lines:
-        maps[fcount].add @[]
+    for line in lines &"assets/maps/levelmaps/lvl{lvl}.txt":
+        result.add @[]
         for c in line:
-            maps[fcount][lcount].add parseMapTile c
+            result[lcount].add parseMapTile c
         lcount += 1
-    fcount += 1
 
-var emaps : seq[seq[seq[int]]]
-fcount = 0
-for file in walkDir("assets/maps/"):
-    emaps.add @[]
+proc loadEmap(lvl : int) : seq[seq[int]] =
     var lcount = 0
-    for line in file[1].lines:
-        emaps[fcount].add @[]
+    for line in lines &"assets/maps/emaps/lvl{lvl}.txt":
+        result.add @[]
         for c in line:
-            emaps[fcount][lcount].add parseMapTile c
-            lcount += 1
-
+            result[lcount].add parseEmapTile c
+        lcount += 1
 
 
 const
@@ -121,30 +121,56 @@ const
 InitWindow screenWidth, screenHeight, "TrailRun"
 SetTargetFPS 75
 
+
 let
     playertex = LoadTexture "assets/sprites/Player.png"
     tileTexArray = [LoadTexture "assets/sprites/BaseTile.png"]
 
 var
-    plr = Player(pos : makevec2(0, 0))
+    plr = Player(pos : makevec2(0, 0), canMove : true)
     lastframekey = KEY_F
-    plrposeq = @[makevec2(0, 0)]
+    plrPosSeq : seq[Vector2]
+    currentlv = 1
+    deathTimer : int
 
+    # -------------------------- #
+    #       Initialization       #
+    # -------------------------- #
+
+var map = loadMap 1
+var emap = loadEmap 1
+var elocs : seq[Vector2]
+(plr.pos, elocs) = findFromEmap emap
+
+func initLevel(emap : seq[seq[int]], enemylocs : var seq[Vector2], plr : var Player) =
+    (plr.pos, enemylocs) = findFromEmap emap
+    plr.npos = makevec2(0, 0); plr.canMove = true
 
 while not WindowShouldClose():
     ClearBackground RAYWHITE
 
-    lastframekey = movePlayer(plr, lastframekey, numTilesVec)
-    playerAnim plr  
-    if plrposeq[^1] != plr.npos:
-        plrposeq.add plr.npos
+    if plrPosSeq.len > 1:
+        if plr.npos in plrPosSeq[0..^2]:
+            plr.canMove = false
+    if plr.npos notin plrPosSeq:
+        plrPosSeq.add plr.npos
+    
+    if not plr.canMove:
+        if deathTimer == 10:
+            initLevel emap, elocs, plr
+            echo "Reset"
+            plrPosSeq = @[]
+            deathTimer = 0
+        else: deathTimer += 1
 
+    if plr.canMove: lastframekey = movePlayer(plr, lastframekey, numTilesVec)
+    playerAnim plr
     # ---------------- #
     #       DRAW       #
     # ---------------- #
 
     BeginDrawing()
-    renderMap maps[0], tileTexArray, tilesize
+    renderMap map, tileTexArray, tilesize
     drawTexCenteredFromGrid playertex, plr.pos, tilesize, WHITE
     EndDrawing()
 

@@ -2,6 +2,9 @@ import raylib, math
 
 const colorArr* : array[25, Color] = [LIGHTGRAY, GRAY, DARKGRAY, YELLOW, GOLD, ORANGE, PINK, RED, MAROON, GREEN, LIME, DARKGREEN, SKYBLUE, BLUE, DARKBLUE, PURPLE, VIOLET, DARKPURPLE, BEIGE, BROWN, DARKBROWN, WHITE, BLACK, MAGENTA, RAYWHITE]
 
+func toTuple*(v : Vector2) : (float32, float32) =
+    return (v.x, v.y) 
+
 func makevec2*(x, y: float | float32 | int) : Vector2 =
     result.x = float x
     result.y = float y
