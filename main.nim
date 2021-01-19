@@ -88,7 +88,9 @@ proc findFromEmap(map : seq[seq[int]]) : (Vector2, seq[Vector2]) =
                 if map[i][j] == 1: result[0] = makevec2(j, i)
                 if map[i][j] == 2: result[1].add makevec2(j, i)
 
-                
+proc renderTrail(trail : seq[Vector2], trailTex : Texture, tilesize : int) =
+    for v in trail[0..^1]:
+        drawTexFromGrid(trailTex, v, tilesize)
 
 
     # ----------------------- #
@@ -125,6 +127,8 @@ SetTargetFPS 75
 let
     playertex = LoadTexture "assets/sprites/Player.png"
     tileTexArray = [LoadTexture "assets/sprites/BaseTile.png"]
+    trailTex = LoadTexture "assets/sprites/WalkedTile.png"
+
 
 var
     plr = Player(pos : makevec2(0, 0), canMove : true)
@@ -156,9 +160,8 @@ while not WindowShouldClose():
         plrPosSeq.add plr.npos
     
     if not plr.canMove:
-        if deathTimer == 10:
+        if deathTimer == 5:
             initLevel emap, elocs, plr
-            echo "Reset"
             plrPosSeq = @[]
             deathTimer = 0
         else: deathTimer += 1
@@ -171,6 +174,7 @@ while not WindowShouldClose():
 
     BeginDrawing()
     renderMap map, tileTexArray, tilesize
+    renderTrail plrPosSeq, trailTex, tilesize
     drawTexCenteredFromGrid playertex, plr.pos, tilesize, WHITE
     EndDrawing()
 
