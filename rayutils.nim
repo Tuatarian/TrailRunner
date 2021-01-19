@@ -2,6 +2,10 @@ import raylib, math
 
 const colorArr* : array[25, Color] = [LIGHTGRAY, GRAY, DARKGRAY, YELLOW, GOLD, ORANGE, PINK, RED, MAROON, GREEN, LIME, DARKGREEN, SKYBLUE, BLUE, DARKBLUE, PURPLE, VIOLET, DARKPURPLE, BEIGE, BROWN, DARKBROWN, WHITE, BLACK, MAGENTA, RAYWHITE]
 
+proc UnloadTexture*(texargs : varargs[Texture]) =
+    for tex in texargs:
+        UnloadTexture tex
+
 func toTuple*(v : Vector2) : (float32, float32) =
     return (v.x, v.y) 
 
@@ -66,6 +70,9 @@ func `mod`*(v, v2 : Vector2) : Vector2 =
 func `*`*(v, v2 : Vector2) : Vector2 =
     result.x = v.x * v2.x
     result.y = v.y * v2.y
+
+func `*`*(v : Vector2, i : int) : Vector2 =
+    return makevec2(v.x * float32 i, v.y * float32 i)
 
 func cart2Polar*(v : Vector2, c = Vector2(x : 0, y : 0)) : Vector2 =
     let v = v - c

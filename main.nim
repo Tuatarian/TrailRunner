@@ -90,7 +90,7 @@ proc findFromEmap(map : seq[seq[int]]) : (Vector2, seq[Vector2]) =
 
 proc renderTrail(trail : seq[Vector2], trailTex : Texture, tilesize : int) =
     for v in trail[0..^1]:
-        drawTexFromGrid(trailTex, v, tilesize)
+        drawTexFromGrid trailTex, v, tilesize
 
 
     # ----------------------- #
@@ -174,10 +174,11 @@ while not WindowShouldClose():
 
     BeginDrawing()
     renderMap map, tileTexArray, tilesize
-    renderTrail plrPosSeq, trailTex, tilesize
+    renderTrail plrPosSeq, trailTex, tilesize 
     drawTexCenteredFromGrid playertex, plr.pos, tilesize, WHITE
     EndDrawing()
 
 for tex in tileTexArray:
     UnloadTexture tex
+UnloadTexture playertex, trailTex
 CloseWindow()
