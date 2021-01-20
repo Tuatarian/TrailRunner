@@ -6,6 +6,8 @@ type
         npos : Vector2
         sprite : Texture2D
         canMove : bool
+        dead : bool
+        won : bool
 
     # --------------------------- #
     #       Grid Management       #
@@ -69,6 +71,7 @@ func playerAnim(plr : var Player) =
 func parseMapTile(c : char) : int =
     if c == '-': return 0
     if c == '#': return 1
+    if c == '=': return 2
 
 func parseEmapTile(c : char) : int =
     if c == '-': return 0
@@ -80,6 +83,12 @@ proc renderMap(map : seq[seq[int]], tileTexArray : openArray[Texture], tilesize 
         for j in 0..<map[i].len:
             if map[i][j] != 0:
                 drawTexFromGrid(tileTexArray[map[i][j] - 1], makevec2(j, i), tilesize)
+
+proc findFromMap(map : seq[seq[int]]) : Vector2 =
+    for i in 0..<map.len:
+        for j in 0..<map[i].len:
+            if map[i][j] == 2:
+                result = makevec2(j, i)
 
 proc findFromEmap(map : seq[seq[int]]) : (Vector2, seq[Vector2]) =
     for i in 0..<map.len:
@@ -114,6 +123,10 @@ proc loadEmap(lvl : int) : seq[seq[int]] =
         lcount += 1
 
 
+    # -------------------------- #
+    #       Initialization       #
+    # -------------------------- #
+
 const
     tilesize = 96
     screenHeight = 768
@@ -123,10 +136,9 @@ const
 InitWindow screenWidth, screenHeight, "TrailRun"
 SetTargetFPS 75
 
-
 let
     playertex = LoadTexture "assets/sprites/Player.png"
-    tileTexArray = [LoadTexture "assets/sprites/BaseTile.png"]
+    tileTexArray = [LoadTexture "assets/sprites/BaseTile.png", LoadTexture "assets/sprites/LvlEndPortal.png"]
     trailTex = LoadTexture "assets/sprites/WalkedTile.png"
 
 
@@ -136,38 +148,59 @@ var
     plrPosSeq : seq[Vector2]
     currentlv = 1
     deathTimer : int
+    winTimer : int
+    map = loadMap 1
+    emap = loadEmap 1 
+    elocs : seq[Vector2]
+    lvenloc = findFromMap map
 
-    # -------------------------- #
-    #       Initialization       #
-    # -------------------------- #
-
-var map = loadMap 1
-var emap = loadEmap 1
-var elocs : seq[Vector2]
 (plr.pos, elocs) = findFromEmap emap
 
 func initLevel(emap : seq[seq[int]], enemylocs : var seq[Vector2], plr : var Player) =
     (plr.pos, enemylocs) = findFromEmap emap
     plr.npos = makevec2(0, 0); plr.canMove = true
 
+proc loadLevel(lvl : int, map, emap : var seq[seq[int]], enemylocs : var seq[Vector2], plr : var Player) =
+    emap = loadEmap lvl; map = loadMap lvl
+    initLevel emap, enemylocs, plr
+
 while not WindowShouldClose():
     ClearBackground RAYWHITE
 
+    # Check if player walked on trail
     if plrPosSeq.len > 1:
         if plr.npos in plrPosSeq[0..^2]:
             plr.canMove = false
+            plr.dead = true
     if plr.npos notin plrPosSeq:
         plrPosSeq.add plr.npos
     
-    if not plr.canMove:
+    if not plr.canMove and plr.dead:
         if deathTimer == 5:
             initLevel emap, elocs, plr
             plrPosSeq = @[]
             deathTimer = 0
         else: deathTimer += 1
+    
+    # Check if player has reached the end goal
+    if plr.npos == lvenloc:
+        plr.won = true
 
+    if plr.won:
+        plr.canMove = false
+        if winTimer == 10:
+            plr.won = false
+            currentlv += 0
+            loadLevel currentlv, map, emap, elocs, plr
+            winTimer = 0
+        else: winTimer += 1
+        
+
+
+    # Move and Animate Player
     if plr.canMove: lastframekey = movePlayer(plr, lastframekey, numTilesVec)
     playerAnim plr
+
     # ---------------- #
     #       DRAW       #
     # ---------------- #
