@@ -194,8 +194,7 @@ while not WindowShouldClose():
             loadLevel currentlv, map, emap, elocs, plr
             winTimer = 0
         else: winTimer += 1
-        
-
+    
 
     # Move and Animate Player
     if plr.canMove: lastframekey = movePlayer(plr, lastframekey, numTilesVec)

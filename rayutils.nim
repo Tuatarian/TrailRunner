@@ -24,10 +24,10 @@ func grEqCeil*(n : int | float | float32) : int | float | float32 =
         return n
     return ceil(n)
 
-proc drawTexCentered*(tex : Texture2D, pos : Vector2, tint : Color) =
+proc drawTexCentered*(tex : Texture, pos : Vector2, tint : Color) =
     tex.DrawTexture(int pos.x + tex.width / 2, int pos.y + tex.height / 2, tint)
 
-proc drawTexCentered*(tex : Texture2D, posx, posy : int | float | float32, tint : Color) =
+proc drawTexCentered*(tex : Texture, posx, posy : int | float | float32, tint : Color) =
     tex.DrawTexture(int posx + tex.width / 2, int posy + tex.height / 2, tint)
 
 func reflect*(i, tp : int | float) : int | float =
