@@ -1,4 +1,4 @@
-import raylib, math
+import raylib, math, hashes
 
 const colorArr* : array[25, Color] = [LIGHTGRAY, GRAY, DARKGRAY, YELLOW, GOLD, ORANGE, PINK, RED, MAROON, GREEN, LIME, DARKGREEN, SKYBLUE, BLUE, DARKBLUE, PURPLE, VIOLET, DARKPURPLE, BEIGE, BROWN, DARKBROWN, WHITE, BLACK, MAGENTA, RAYWHITE]
 
@@ -23,6 +23,15 @@ func grEqCeil*(n : int | float | float32) : int | float | float32 =
     if n == n.int.float:
         return n
     return ceil(n)
+
+proc `[]`*[T](container : seq[seq[T]], v : Vector2) : T =
+    return container[v.x][v.y]
+
+proc `[]`*[T](container : seq[seq[T]], x, y : int | float | float32) : T =
+    return container[int x][int y]
+
+proc roundDown*(v : Vector2) : Vector2 =
+    return makevec2(float32 int v.x, float32 int v.y)
 
 proc drawTexCentered*(tex : Texture, pos : Vector2, tint : Color) =
     tex.DrawTexture(int pos.x + tex.width / 2, int pos.y + tex.height / 2, tint)
@@ -106,6 +115,12 @@ func makecolor*[T](f, d, l, o : T) : Color =
 
 func normalizeToScreen*(v, screenvec : Vector2) : Vector2 =
     return makevec2(v.x / screenvec.x, v.y / screenvec.y )
+
+proc hash*(v : Vector2) : Hash =
+    var h : Hash = 0
+    h = h !& hash v.x
+    h = h !& hash v.y
+    result = !$h
 
 proc drawTriangleFan*(verts : openArray[Vector2], color : Color) =
     var inpoint : Vector2
