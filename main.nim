@@ -41,106 +41,120 @@ proc drawTexCenteredFromGrid(tex : Texture, pos : Vector2, tilesize : int, tint 
     #       Player Management       #
     # ----------------------------- #
 
-proc movePlayer(plr : var Player, lfkey : KeyboardKey, numtilesVec : VEctor2) : (KeyboardKey, bool) =
-    if IsKeyDown(KEY_A) or IsKeyDown(KEY_LEFT):
-        if lfkey == KEY_LEFT:
-            return (KEY_LEFT, false)
-        plr.npos.x += -1
-        return (KEY_LEFT, true)
-    elif IsKeyDown(KEY_D) or IsKeyDown(KEY_RIGHT):
-        if lfkey == KEY_RIGHT:
-            return (KEY_RIGHT, false)
-        plr.npos.x += 1
-        return (KEY_RIGHT, true)
-    elif IsKeyDown(KEY_W) or IsKeyDown(KEY_UP):
-        if lfkey == KEY_UP:
-            return (KEY_UP, false)
-        plr.npos.y += -1
-        return (KEY_UP, true)
-    elif IsKeyDown(KEY_S) or IsKeyDown(KEY_DOWN):
-        if lfkey == KEY_DOWN:
-            return (KEY_DOWN, false)
-        plr.npos.y += 1
-        return (KEY_DOWN, true)
-    plr.npos = clamp(plr.npos, numTilesVec - 1)
-    plr.npos = anticlamp(plr.npos, makevec2(0, 0))
-
 func playerAnim(plr : var Player) =
     if plr.pos != plr.npos:
         let dir = plr.npos - plr.pos
         plr.pos += dir / 2
 
+proc movePlayer(plr : var Player, lfkey : var KeyboardKey, numtilesVec : Vector2, mvcount : var int) : bool =
+    if IsKeyDown(KEY_A) or IsKeyDown(KEY_LEFT):
+        if lfkey == KEY_LEFT:
+            lfkey = KEY_LEFT
+            result = false
+        else:
+            plr.npos.x += -1
+            lfkey = KEY_LEFT
+            result = true
+            mvcount += 1
+    elif IsKeyDown(KEY_D) or IsKeyDown(KEY_RIGHT):
+        if lfkey == KEY_RIGHT:
+            lfkey = KEY_RIGHT
+            result = false
+        else:
+            plr.npos.x += 1
+            lfkey = KEY_RIGHT
+            result = true
+            mvcount += 1
+    elif IsKeyDown(KEY_W) or IsKeyDown(KEY_UP):
+        if lfkey == KEY_UP:
+            lfkey = KEY_UP
+            result = false
+        else:
+            plr.npos.y += -1
+            lfkey = KEY_UP
+            result = true
+            mvcount += 1
+    elif IsKeyDown(KEY_S) or IsKeyDown(KEY_DOWN):
+        if lfkey == KEY_DOWN:
+            lfkey = KEY_DOWN
+            result = false
+        else:
+            plr.npos.y += 1
+            lfkey = KEY_DOWN
+            result = true
+            mvcount += 1
+    else:
+        lfkey = KEY_SCROLL_LOCK
+        result = false
+    plr.npos = anticlamp(clamp(plr.npos, numTilesVec - 1), makevec2(0, 0))
+
     # ----------------------- #
     #       Pathfinding       #
     # ----------------------- #
 
-func getNeighbors(map : seq[seq[int]], pos : Vector2) : seq[Vector2] =
-    if pos.x < float32 map.len - 1:
-        if map[pos.y, pos.x + 1] != 4:
-            result.add(makevec2(pos.x + 1, pos.y))
-    if pos.x > 0:
-        if map[pos.y, pos.x - 1] != 4:
-            result.add(makevec2(pos.x - 1, pos.y))
-    if pos.y < float32 map[1].len - 1:
-        if map[pos.y + 1, pos.x] != 4:
-            result.add(makevec2(pos.x, pos.y + 1))
-    if pos.y > 0:
-        if map[pos.y - 1, pos.x] != 4:
-            result.add(makevec2(pos.x, pos.y - 1))
+func getNeighbors(v : Vector2, map : seq[seq[int]]) : seq[Vector2] =
+    let v = makevec2(v.y, v.x)
+    if v.x < map.len - 1:
+        if map[v.x + 1, v.y] != 4:
+            result.add makevec2(v.y, v.x + 1)
+    if v.x > 0:
+        if map[v.x - 1, v.y] != 4:
+            result.add makevec2(v.y, v.x - 1)
+    if v.y < map[0].len - 1:
+        if map[v.x, v.y + 1] != 4:
+            result.add makevec2(v.y + 1, v.x)
+    if v.y > 0:
+        if map[v.x, v.y - 1] != 4:
+            result.add makevec2(v.y - 1, v.x)      
 
 
-
-proc findPathBfs(start, target : Vector2, map : seq[seq[int]]) : seq[Vector2] =
+func findPathBFS(start, target : Vector2, map : seq[seq[int]]) : seq[Vector2] =
     var fillEdge : Deque[Vector2]
-    fillEdge.addFirst start
-    var seen = {start : start}.toTable
+    fillEdge.addLast start
+    var traceTable = toTable {start : start}
 
     while fillEdge.len > 0:
-        var curpos : Vector2 = fillEdge.popFirst
-        for v in getNeighbors(map, curpos):
-            if v notin seen:
-                fillEdge.addLast v
-                seen[v] = curpos
-                echo curpos, fillEdge.len
+        let curpos = fillEdge.popFirst
         if curpos == target: break
+        for c in getNeighbors(curpos, map):
+            if c notin traceTable:
+                traceTable[c] = curpos
+                fillEdge.addLast c
     
-    var curpos = target
     var antipath : seq[Vector2]
-    while curpos != start:
-        antipath.add curpos
-        curpos = seen[curpos]
+    var tracepos = target
+    while tracepos != start:
+        antipath.add traceTable[tracepos]
+        tracepos = traceTable[tracepos]
     for i in 1..antipath.len:
         result.add antipath[^i]
-    echo result
+    result.add target
 
-
-    # ---------------------------- #
-    #       Enemy Management       #
-    # ---------------------------- #
+    # ----------------------------- #
+    #       Entity Management       #
+    # ----------------------------- #
 
 proc renderEnemies(enemies : seq[Enemy], enemyTex : Texture, tilesize : int) =
     for e in enemies:
         drawTexCenteredFromGrid enemyTex, e.pos, tilesize, WHITE
 
-proc enemyAnim(enem : var Enemy) =
-    echo "out"
-    if enem.npos != enem.pos:
-        echo "anm"
-        let dir = enem.npos - enem.pos
-        enem.pos += dir / 2
-
-proc moveEnemies(enemies : var seq[Enemy], plr : Player, map : seq[seq[int]]) =
+proc enemyAnim(enemies : var seq[Enemy]) =
     for i in 0..<enemies.len:
-        echo "mv"
-        enemies[i].npos = findPathBfs(roundDown enemies[i].pos, plr.npos, map)[0]
-        enemies[i].pos = enemies[i].npos
+        if enemies[i].npos != enemies[i].pos:
+            let dir = enemies[i].npos - enemies[i].pos
+            enemies[i].pos += dir / 2
 
+proc moveEnemies(enemies : var seq[Enemy], target : Vector2, map : seq[seq[int]]) =
+    echo "mvencalled" & &"  targt: {grEqCeil target}"
+    for i in 0..<enemies.len:
+        enemies[i].npos = findPathBFS(round enemies[i].pos, grEqCeil target, map)[1]
+        echo $(round enemies[i].pos) & "  ->  " & $findPathBFS(roundDown enemies[i].pos, grEqCeil target, map)[1]
 
     # -------------------------- #
     #       Map Management       #
     # -------------------------- #
 
-func parseMapTile(c : char) : int =
+func parseMapTile(c : char) : int = 
     if c == '-': return 0
     if c == '#': return 1
     if c == '=': return 2
@@ -227,12 +241,12 @@ var
     elocs : seq[Vector2]
     lvenloc = findFromMap map
     enemies : seq[Enemy]
-    lfplrpos : Vector2
+    movecount : int
 
 (plr.pos, elocs) = findFromEmap emap
 
 for loc in elocs:
-    enemies.add(Enemy(pos : loc))
+    enemies.add(Enemy(pos : loc, npos : loc))
 
 func initLevel(emap : seq[seq[int]], enemies : var seq[Enemy], enemylocs : var seq[Vector2], plr : var Player) =
     (plr.pos, enemylocs) = findFromEmap emap
@@ -278,11 +292,12 @@ while not WindowShouldClose():
     
 
     # Move and Animate Player and Enemies
-    var moved : bool
-    if plr.canMove: 
-        (lastframekey, moved) = movePlayer(plr, lastframekey, numTilesVec)
-        if moved: moveEnemies enemies, plr, map
+    if plr.canMove:
+        echo movecount
+        if movePlayer(plr, lastframekey, numTilesVec, movecount) and movecount mod 2 == 0:
+            moveEnemies enemies, plr.pos, map
     playerAnim plr
+    enemyAnim enemies
 
 
     # ---------------- #
