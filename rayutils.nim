@@ -24,11 +24,17 @@ func grEqCeil*(n : int | float | float32) : int | float | float32 =
         return n
     return ceil(n)
 
+func grEqCeil*(v : Vector2) : Vector2 =
+    return makevec2(grEqCeil v.x, grEqCeil v.y)
+
 proc `[]`*[T](container : seq[seq[T]], v : Vector2) : T =
     return container[v.x][v.y]
 
 proc `[]`*[T](container : seq[seq[T]], x, y : int | float | float32) : T =
     return container[int x][int y]
+
+proc round*(v : Vector2) : Vector2 = 
+    return makevec2(round v.x, round v.y)
 
 proc roundDown*(v : Vector2) : Vector2 =
     return makevec2(float32 int v.x, float32 int v.y)
