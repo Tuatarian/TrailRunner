@@ -94,9 +94,6 @@ func cart2Polar*(v : Vector2, c = Vector2(x : 0, y : 0)) : Vector2 =
     result.x = sqrt((v.x ^ 2) + (v.y ^ 2)) 
     result.y = arctan(v.y / v.x)
 
-proc echo(vs : varargs[Vector2]) =
-    for v in vs:
-        echo (v.x, v.y)
 
 func dist*(v, v2 : Vector2) : float = 
     return abs sqrt(((v.x - v2.x) ^ 2) + ((v.y - v2.y) ^ 2))
