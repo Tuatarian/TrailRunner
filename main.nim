@@ -7,6 +7,7 @@ type
         canMove : bool
         dead : bool
         won : bool
+        turnsLeftFrozen : int
     Enemy = object
         pos : Vector2
         npos : Vector2
@@ -46,7 +47,18 @@ func playerAnim(plr : var Player) =
         let dir = plr.npos - plr.pos
         plr.pos += dir / 2
 
-proc movePlayer(plr : var Player, lfkey : var KeyboardKey, numtilesVec : Vector2, mvcount : var int) : bool =
+proc checkFreeze(plr : var Player, movecount : var int, spacepressed : var bool, freezeMoveFloor : int) =
+    echo spacepressed, " -> ", movecount, " -> ", movecount div freezeMoveFloor, " -> ", plr.turnsLeftFrozen
+    if spacepressed and plr.turnsLeftFrozen == 0:
+        plr.turnsLeftFrozen = movecount div freezeMoveFloor
+        movecount = 0
+        spacepressed = false
+    elif plr.turnsLeftFrozen > 0:
+        plr.turnsLeftFrozen += -1
+    elif spacepressed:
+        spacepressed = false
+
+proc movePlayer(plr : var Player, lfkey : var KeyboardKey, numtilesVec : Vector2, mvcount : var int, spacepressed : var bool, freezeMoveFloor : int) : bool =
     if IsKeyDown(KEY_A) or IsKeyDown(KEY_LEFT):
         if lfkey == KEY_LEFT:
             lfkey = KEY_LEFT
@@ -55,7 +67,6 @@ proc movePlayer(plr : var Player, lfkey : var KeyboardKey, numtilesVec : Vector2
             plr.npos.x += -1
             lfkey = KEY_LEFT
             result = true
-            mvcount += 1
     elif IsKeyDown(KEY_D) or IsKeyDown(KEY_RIGHT):
         if lfkey == KEY_RIGHT:
             lfkey = KEY_RIGHT
@@ -64,7 +75,6 @@ proc movePlayer(plr : var Player, lfkey : var KeyboardKey, numtilesVec : Vector2
             plr.npos.x += 1
             lfkey = KEY_RIGHT
             result = true
-            mvcount += 1
     elif IsKeyDown(KEY_W) or IsKeyDown(KEY_UP):
         if lfkey == KEY_UP:
             lfkey = KEY_UP
@@ -73,7 +83,6 @@ proc movePlayer(plr : var Player, lfkey : var KeyboardKey, numtilesVec : Vector2
             plr.npos.y += -1
             lfkey = KEY_UP
             result = true
-            mvcount += 1
     elif IsKeyDown(KEY_S) or IsKeyDown(KEY_DOWN):
         if lfkey == KEY_DOWN:
             lfkey = KEY_DOWN
@@ -82,11 +91,20 @@ proc movePlayer(plr : var Player, lfkey : var KeyboardKey, numtilesVec : Vector2
             plr.npos.y += 1
             lfkey = KEY_DOWN
             result = true
-            mvcount += 1
+    elif IsKeyDown(KEY_X):
+        if lfkey == KEY_X:
+            lfkey = KEY_X
+            result = false
+        else:
+            lfkey = KEY_X
+            result = true
     else:
         lfkey = KEY_SCROLL_LOCK
         result = false
     plr.npos = anticlamp(clamp(plr.npos, numTilesVec - 1), makevec2(0, 0))
+    if result:
+        if plr.turnsLeftFrozen == 0: mvcount += 1 
+        checkFreeze plr, mvcount, spacepressed, freezeMoveFloor
 
     # ----------------------- #
     #       Pathfinding       #
@@ -121,7 +139,7 @@ func findPathBFS(start, target : Vector2, map : seq[seq[int]]) : seq[Vector2] =
                 traceTable[c] = curpos
                 fillEdge.addLast c
     
-    var antipath : seq[Vector2]
+    var antipath = @[target]
     var tracepos = target
     while tracepos != start:
         antipath.add traceTable[tracepos]
@@ -145,10 +163,10 @@ proc enemyAnim(enemies : var seq[Enemy]) =
             enemies[i].pos += dir / 2
 
 proc moveEnemies(enemies : var seq[Enemy], target : Vector2, map : seq[seq[int]]) =
-    echo "mvencalled" & &"  targt: {grEqCeil target}"
     for i in 0..<enemies.len:
-        enemies[i].npos = findPathBFS(round enemies[i].pos, grEqCeil target, map)[1]
-        echo $(round enemies[i].pos) & "  ->  " & $findPathBFS(roundDown enemies[i].pos, grEqCeil target, map)[1]
+        let x = findPathBFS(round enemies[i].pos, grEqCeil target, map)
+        if x.len > 1:
+            enemies[i].npos = findPathBFS(round enemies[i].pos, grEqCeil target, map)[1]
 
     # -------------------------- #
     #       Map Management       #
@@ -218,6 +236,7 @@ const
     screenHeight = 768
     screenWidth = 1248
     numTilesVec = makevec2(screenWidth div tilesize, screenHeight div tilesize)
+    freezeMoveFloor = 4
 
 InitWindow screenWidth, screenHeight, "TrailRun"
 SetTargetFPS 75
@@ -242,22 +261,29 @@ var
     lvenloc = findFromMap map
     enemies : seq[Enemy]
     movecount : int
+    spacecache : bool
+    timersToReset = @[deathTimer]
 
 (plr.pos, elocs) = findFromEmap emap
 
 for loc in elocs:
     enemies.add(Enemy(pos : loc, npos : loc))
 
-func initLevel(emap : seq[seq[int]], enemies : var seq[Enemy], enemylocs : var seq[Vector2], plr : var Player) =
+func initLevel(emap : seq[seq[int]], enemies : var seq[Enemy], enemylocs : var seq[Vector2], plr : var Player, mvcount : var int, plrPosSeq : var seq[Vector2], timers : var seq[int]) =
     (plr.pos, enemylocs) = findFromEmap emap
     plr.npos = makevec2(0, 0); plr.canMove = true
     for i in 0..<enemies.len:
         enemies[i].pos = enemylocs[i]
+        enemies[i].npos = enemylocs[i]
+    plr.turnsLeftFrozen = 0
+    mvcount = 0
+    plrPosSeq = @[]
+    for i in 0..<timers.len: timers[i] = 0
 
 
-proc loadLevel(lvl : int, map, emap : var seq[seq[int]], enemies : var seq[Enemy], enemylocs : var seq[Vector2], plr : var Player) =
+proc loadLevel(lvl : int, map, emap : var seq[seq[int]], enemies : var seq[Enemy], enemylocs : var seq[Vector2], plr : var Player, mvcount : var int, plrPosSeq : var seq[Vector2], timers : var seq[int]) =
     emap = loadEmap lvl; map = loadMap lvl
-    initLevel emap, enemies, enemylocs, plr
+    initLevel emap, enemies, elocs, plr, movecount, plrPosSeq, timers
 
 while not WindowShouldClose():
     ClearBackground RAYWHITE
@@ -272,10 +298,7 @@ while not WindowShouldClose():
     
     if not plr.canMove and plr.dead:
         if deathTimer == 5:
-            initLevel emap, enemies, elocs, plr
-            plrPosSeq = @[]
-            deathTimer = 0
-        else: deathTimer += 1
+            initLevel emap, enemies, elocs, plr, movecount, plrPosSeq, timersToReset
     
     # Check if player has reached the end goal
     if plr.npos == lvenloc:
@@ -286,16 +309,21 @@ while not WindowShouldClose():
         if winTimer == 10:
             plr.won = false
             currentlv += 0
-            loadLevel currentlv, map, emap, enemies, elocs, plr
+            loadLevel currentlv, map, emap, enemies, elocs, plr, movecount, plrPosSeq, timersToReset
             winTimer = 0
         else: winTimer += 1
     
-
+    # Cache buttons pressed
+    if IsKeyDown(KEY_SPACE):
+        spacecache = true
+    
     # Move and Animate Player and Enemies
     if plr.canMove:
-        echo movecount
-        if movePlayer(plr, lastframekey, numTilesVec, movecount) and movecount mod 2 == 0:
+        if movePlayer(plr, lastframekey, numTilesVec, movecount, spacecache, freezeMoveFloor) and plr.turnsLeftFrozen == 0:
             moveEnemies enemies, plr.pos, map
+    for e in enemies:
+        if round(e.pos) == plr.pos:
+            initLevel emap, enemies, elocs, plr, movecount, plrPosSeq, timersToReset
     playerAnim plr
     enemyAnim enemies
 
