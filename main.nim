@@ -8,6 +8,8 @@ type
         dead : bool
         won : bool
         turnsLeftFrozen : int
+        kickingEnemies : bool
+        kickPower : int
     Enemy = object
         pos : Vector2
         npos : Vector2
@@ -15,6 +17,7 @@ type
         canMove : bool
         dead : bool
         won : bool
+        kicked : bool
 
     # --------------------------- #
     #       Grid Management       #
@@ -36,7 +39,7 @@ proc drawTexFromGrid(tex : Texture, pos : Vector2, tilesize : int) =
     DrawTexture(tex, int pos.x * tilesize, int pos.y * tilesize, WHITE)
 
 proc drawTexCenteredFromGrid(tex : Texture, pos : Vector2, tilesize : int, tint : Color) =
-    DrawTexture(tex, int pos.x * tilesize + (tilesize - tex.width) / 2, int pos.y * tilesize + (tilesize - tex.height) / 2, tint)
+    DrawTexture(tex, int32 pos.x * tilesize + (tilesize - tex.width) / 2, int32 pos.y * tilesize + (tilesize - tex.height) / 2, tint)
 
     # ----------------------------- #
     #       Player Management       #
@@ -46,19 +49,30 @@ func playerAnim(plr : var Player) =
     if plr.pos != plr.npos:
         let dir = plr.npos - plr.pos
         plr.pos += dir / 2
+    if abs(plr.pos - plr.npos) <& 0.1: 
+        plr.pos = plr.npos
 
-proc checkFreeze(plr : var Player, movecount : var int, spacepressed : var bool, freezeMoveFloor : int) =
-    echo spacepressed, " -> ", movecount, " -> ", movecount div freezeMoveFloor, " -> ", plr.turnsLeftFrozen
-    if spacepressed and plr.turnsLeftFrozen == 0:
-        plr.turnsLeftFrozen = movecount div freezeMoveFloor
+proc checkFreeze(plr : var Player, movecount : var int, actionFloor : int, spacepressed, altpressed : var bool ) =
+
+    echo movecount, " -> ", actionFloor
+    if spacepressed and movecount >= actionFloor:
+        plr.kickingEnemies = true
+        plr.kickPower = movecount div actionFloor
         movecount = 0
         spacepressed = false
-    elif plr.turnsLeftFrozen > 0:
-        plr.turnsLeftFrozen += -1
-    elif spacepressed:
-        spacepressed = false
+    elif altpressed and movecount >= actionFloor + 2:
+        plr.turnsLeftFrozen = 1
+        movecount = 0
+        altpressed = false
+    else:
+        if plr.turnsLeftFrozen > 0:
+            plr.turnsLeftFrozen += -1
+        if spacepressed:
+            spacepressed = false
+        if altpressed:
+            altpressed = false
 
-proc movePlayer(plr : var Player, lfkey : var KeyboardKey, numtilesVec : Vector2, mvcount : var int, spacepressed : var bool, freezeMoveFloor : int) : bool =
+proc movePlayer(plr : var Player, lfkey : var KeyboardKey, numtilesVec : Vector2, mvcount : var int, spacepressed, altpressed : var bool, freezeMoveFloor : int) : bool =
     if IsKeyDown(KEY_A) or IsKeyDown(KEY_LEFT):
         if lfkey == KEY_LEFT:
             lfkey = KEY_LEFT
@@ -104,7 +118,7 @@ proc movePlayer(plr : var Player, lfkey : var KeyboardKey, numtilesVec : Vector2
     plr.npos = anticlamp(clamp(plr.npos, numTilesVec - 1), makevec2(0, 0))
     if result:
         if plr.turnsLeftFrozen == 0: mvcount += 1 
-        checkFreeze plr, mvcount, spacepressed, freezeMoveFloor
+        checkFreeze plr, mvcount, freezeMoveFloor, spacepressed, altpressed
 
     # ----------------------- #
     #       Pathfinding       #
@@ -158,14 +172,21 @@ proc renderEnemies(enemies : seq[Enemy], enemyTex : Texture, tilesize : int) =
 
 proc enemyAnim(enemies : var seq[Enemy]) =
     for i in 0..<enemies.len:
-        if enemies[i].npos != enemies[i].pos:
+        if enemies[i].kicked:
             let dir = enemies[i].npos - enemies[i].pos
             enemies[i].pos += dir / 2
+            if enemies[i].npos == enemies[i].pos:
+                enemies[i].kicked = false
+        elif enemies[i].npos != enemies[i].pos:
+            let dir = enemies[i].npos - enemies[i].pos
+            enemies[i].pos += dir / 2
+        if abs(enemies[i].pos - enemies[i].npos) <& 0.1:
+            enemies[i].pos = enemies[i].npos
 
 proc moveEnemies(enemies : var seq[Enemy], target : Vector2, map : seq[seq[int]]) =
     for i in 0..<enemies.len:
         let x = findPathBFS(round enemies[i].pos, grEqCeil target, map)
-        if x.len > 1:
+        if x.len > 1 and not enemies[i].kicked:
             enemies[i].npos = findPathBFS(round enemies[i].pos, grEqCeil target, map)[1]
 
     # -------------------------- #
@@ -236,7 +257,7 @@ const
     screenHeight = 768
     screenWidth = 1248
     numTilesVec = makevec2(screenWidth div tilesize, screenHeight div tilesize)
-    freezeMoveFloor = 4
+    actionFloor = 3
 
 InitWindow screenWidth, screenHeight, "TrailRun"
 SetTargetFPS 75
@@ -262,6 +283,7 @@ var
     enemies : seq[Enemy]
     movecount : int
     spacecache : bool
+    altcache : bool
     timersToReset = @[deathTimer]
 
 (plr.pos, elocs) = findFromEmap emap
@@ -299,6 +321,8 @@ while not WindowShouldClose():
     if not plr.canMove and plr.dead:
         if deathTimer == 5:
             initLevel emap, enemies, elocs, plr, movecount, plrPosSeq, timersToReset
+            deathTimer = 0
+        deathTimer += 1
     
     # Check if player has reached the end goal
     if plr.npos == lvenloc:
@@ -316,14 +340,24 @@ while not WindowShouldClose():
     # Cache buttons pressed
     if IsKeyDown(KEY_SPACE):
         spacecache = true
+    if IsKeyDown(KEY_LEFT_ALT) or IsKeyDown(KEY_RIGHT_ALT):
+        altcache = true
     
     # Move and Animate Player and Enemies
     if plr.canMove:
-        if movePlayer(plr, lastframekey, numTilesVec, movecount, spacecache, freezeMoveFloor) and plr.turnsLeftFrozen == 0:
+        if movePlayer(plr, lastframekey, numTilesVec, movecount, spacecache, altcache, actionFloor) and plr.turnsLeftFrozen == 0:
             moveEnemies enemies, plr.pos, map
-    for e in enemies:
-        if round(e.pos) == plr.pos:
-            initLevel emap, enemies, elocs, plr, movecount, plrPosSeq, timersToReset
+    for i in 0..<enemies.len:
+        if enemies[i].pos == plr.pos:
+            if plr.kickingEnemies:
+                enemies[i].npos = round enemies[i].pos + normalize(plrPosSeq[^1] - plrPosSeq[^2]) * (plr.kickPower + 1) 
+                enemies[i].kicked = true
+                movecount = 0
+                plr.kickingEnemies = false
+                plr.kickPower = 0
+            else:
+                plr.canMove = false
+                plr.dead = true
     playerAnim plr
     enemyAnim enemies
 
