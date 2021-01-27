@@ -19,6 +19,9 @@ func clamp*(v, v2 : Vector2) : Vector2 =
 func antiClamp*(v, v2 : Vector2) : Vector2 =
     return makevec2(max(v.x, v2.x), max(v.y, v2.y))
 
+func ceil*(v : Vector2) : Vector2 =
+    return makevec2(ceil v.x, ceil v.y)
+
 func grEqCeil*(n : int | float | float32) : int | float | float32 =
     if n == n.int.float:
         return n
@@ -47,6 +50,9 @@ proc drawTexCentered*(tex : Texture, posx, posy : int | float | float32, tint : 
 
 func reflect*(i, tp : int | float) : int | float =
     return tp - i + tp
+
+func abs*(v : Vector2) : Vector2 =
+    return makevec2(abs v.x, abs v.y)
 
 func `+`*(v, v2 : Vector2) : Vector2 =
     result.x = v.x + v2.x
@@ -86,8 +92,14 @@ func `*`*(v, v2 : Vector2) : Vector2 =
     result.x = v.x * v2.x
     result.y = v.y * v2.y
 
-func `*`*(v : Vector2, i : int) : Vector2 =
+func `*`*(v : Vector2, i : int | float | float32) : Vector2 =
     return makevec2(v.x * float32 i, v.y * float32 i)
+
+func `<|`*(v : Vector2, n : float32 | int | float) : bool =
+    return v.x < n or v.y < n
+
+func `<&`*(v : Vector2, n : float32 | int | float) : bool =
+    return v.x < n and v.y < n
 
 func cart2Polar*(v : Vector2, c = Vector2(x : 0, y : 0)) : Vector2 =
     let v = v - c
@@ -148,4 +160,4 @@ proc drawTriangleFan*(verts : openArray[Vector2], color : Color) =
         DrawTriangle(points[0], points[1], points[2], color)
 
 func normalize*(v : Vector2) : Vector2 =
-    return v / sqrt v.x ^ 2 + v.y ^ 2
+    return v / sqrt(v.x ^ 2 + v.y ^ 2)
