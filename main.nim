@@ -1,4 +1,6 @@
-import raylib, os, lenientops, rayutils, math, strformat, deques, sets, tables
+import raylib, os, lenientops, rayutils, math, strformat, deques, sets, tables, sugar, random
+
+randomize()
 
 type
     Player = object
@@ -18,6 +20,10 @@ type
         dead : bool
         won : bool
         kicked : bool
+    Tile = enum
+        GRND, WALL, GOAL
+    ETile = enum
+        NONE, PLR, EN1
 
     # --------------------------- #
     #       Grid Management       #
@@ -117,30 +123,30 @@ proc movePlayer(plr : var Player, lfkey : var KeyboardKey, numtilesVec : Vector2
         result = false
     plr.npos = anticlamp(clamp(plr.npos, numTilesVec - 1), makevec2(0, 0))
     if result:
-        if plr.turnsLeftFrozen == 0: mvcount += 1 
+        if plr.turnsLeftFrozen == 0 and plr.kickingEnemies == false: mvcount += 1 
         checkFreeze plr, mvcount, freezeMoveFloor, spacepressed, altpressed
 
     # ----------------------- #
     #       Pathfinding       #
     # ----------------------- #
 
-func getNeighbors(v : Vector2, map : seq[seq[int]]) : seq[Vector2] =
+proc getNeighbors(v : Vector2, map : seq[seq[Tile]], target : Vector2, plrPosSeq : seq[Vector2]) : seq[Vector2] =
     let v = makevec2(v.y, v.x)
     if v.x < map.len - 1:
-        if map[v.x + 1, v.y] != 4:
+        if map[v.x + 1, v.y] != WALL:
             result.add makevec2(v.y, v.x + 1)
     if v.x > 0:
-        if map[v.x - 1, v.y] != 4:
+        if map[v.x - 1, v.y] != WALL:
             result.add makevec2(v.y, v.x - 1)
     if v.y < map[0].len - 1:
-        if map[v.x, v.y + 1] != 4:
+        if map[v.x, v.y + 1] != WALL:
             result.add makevec2(v.y + 1, v.x)
     if v.y > 0:
-        if map[v.x, v.y - 1] != 4:
-            result.add makevec2(v.y - 1, v.x)      
+        if map[v.x, v.y - 1] != WALL:
+            result.add makevec2(v.y - 1, v.x)
 
 
-func findPathBFS(start, target : Vector2, map : seq[seq[int]]) : seq[Vector2] =
+proc findPathBFS(start, target : Vector2, map : seq[seq[Tile]], plrPosSeq : seq[Vector2]) : seq[Vector2] =
     var fillEdge : Deque[Vector2]
     fillEdge.addLast start
     var traceTable = toTable {start : start}
@@ -148,19 +154,21 @@ func findPathBFS(start, target : Vector2, map : seq[seq[int]]) : seq[Vector2] =
     while fillEdge.len > 0:
         let curpos = fillEdge.popFirst
         if curpos == target: break
-        for c in getNeighbors(curpos, map):
+        for c in getNeighbors(curpos, map, target, plrPosSeq):
             if c notin traceTable:
                 traceTable[c] = curpos
                 fillEdge.addLast c
     
-    var antipath = @[target]
-    var tracepos = target
-    while tracepos != start:
-        antipath.add traceTable[tracepos]
-        tracepos = traceTable[tracepos]
-    for i in 1..antipath.len:
-        result.add antipath[^i]
-    result.add target
+
+    if fillEdge.len > 0:
+        var antipath = @[target]
+        var tracepos = target
+        while tracepos != start:
+            antipath.add traceTable[tracepos]
+            tracepos = traceTable[tracepos]
+        for i in 1..antipath.len:
+            result.add antipath[^i]
+        result.add target
 
     # ----------------------------- #
     #       Entity Management       #
@@ -183,44 +191,60 @@ proc enemyAnim(enemies : var seq[Enemy]) =
         if abs(enemies[i].pos - enemies[i].npos) <& 0.1:
             enemies[i].pos = enemies[i].npos
 
-proc moveEnemies(enemies : var seq[Enemy], target : Vector2, map : seq[seq[int]]) =
+proc moveEnemies(enemies : var seq[Enemy], target : Vector2, map : seq[seq[Tile]], plrPosSeq : seq[Vector2]) =
     for i in 0..<enemies.len:
-        let x = findPathBFS(round enemies[i].pos, grEqCeil target, map)
+        let x = findPathBFS(round enemies[i].pos, grEqCeil target, map, plrPosSeq)
         if x.len > 1 and not enemies[i].kicked:
-            enemies[i].npos = findPathBFS(round enemies[i].pos, grEqCeil target, map)[1]
+            let dir = x[1] - enemies[i].pos
+            var weight = rand(100)
+            if weight < 85: enemies[i].npos = x[1]
+            elif weight < 90:
+                let nposcache = enemies[i].pos - dir
+                if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL:
+                    enemies[i].npos = nposcache
+                else: weight += 5
+            elif weight < 95:
+                let nposcache = enemies[i].pos + invert dir
+                if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL:
+                    enemies[i].npos = nposcache
+                else: weight += 5
+            else:
+                let nposcache = enemies[i].pos - invert dir
+                if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL:
+                    enemies[i].npos = nposcache
+                else: enemies[i].npos = x[1]
 
     # -------------------------- #
     #       Map Management       #
     # -------------------------- #
 
-func parseMapTile(c : char) : int = 
-    if c == '-': return 0
-    if c == '#': return 1
-    if c == '=': return 2
+func parseMapTile(c : char) : Tile = 
+    if c == '-': return GRND
+    if c == '#': return WALL
+    if c == '=': return GOAL
 
-func parseEmapTile(c : char) : int =
-    if c == '-': return 0
-    if c == '#': return 1
-    if c == '*': return 2
+func parseEmapTile(c : char) : ETile =
+    if c == '-': return NONE
+    if c == '#': return PLR
+    if c == '*': return EN1
 
-proc renderMap(map : seq[seq[int]], tileTexArray : openArray[Texture], tilesize : int) =
+proc renderMap(map : seq[seq[Tile]], tileTexTable : Table[Tile, Texture], tilesize : int) =
     for i in 0..<map.len:
         for j in 0..<map[i].len:
-            if map[i][j] != 0:
-                drawTexFromGrid(tileTexArray[map[i][j] - 1], makevec2(j, i), tilesize)
+            drawTexFromGrid(tileTexTable[map[i][j]], makevec2(j, i), tilesize)
 
-proc findFromMap(map : seq[seq[int]]) : Vector2 =
+proc findFromMap(map : seq[seq[Tile]]) : Vector2 =
     for i in 0..<map.len:
         for j in 0..<map[i].len:
-            if map[i][j] == 2:
+            if map[i][j] == GOAL:
                 result = makevec2(j, i)
 
-proc findFromEmap(map : seq[seq[int]]) : (Vector2, seq[Vector2]) =
-    for i in 0..<map.len:
-        for j in 0..<map[i].len:
-            if map[i][j] != 0:
-                if map[i][j] == 1: result[0] = makevec2(j, i)
-                if map[i][j] == 2: result[1].add makevec2(j, i)
+proc findFromEmap(emap : seq[seq[Etile]]) : (Vector2, seq[Vector2]) =
+    for i in 0..<emap.len:
+        for j in 0..<emap[i].len:
+            if emap[i][j] != NONE:
+                if emap[i][j] == PLR: result[0] = makevec2(j, i)
+                if emap[i][j] == EN1: result[1].add makevec2(j, i)
 
 proc renderTrail(trail : seq[Vector2], trailTex : Texture, tilesize : int) =
     for v in trail:
@@ -231,7 +255,7 @@ proc renderTrail(trail : seq[Vector2], trailTex : Texture, tilesize : int) =
     #       Import Maps       #
     # ----------------------- #
 
-proc loadMap(lvl : int) : seq[seq[int]] =
+proc loadMap(lvl : int) : seq[seq[Tile]] =
     var lcount = 0
     for line in lines &"assets/maps/levelmaps/lvl{lvl}.txt":
         result.add @[]
@@ -239,7 +263,7 @@ proc loadMap(lvl : int) : seq[seq[int]] =
             result[lcount].add parseMapTile c
         lcount += 1
 
-proc loadEmap(lvl : int) : seq[seq[int]] =
+proc loadEmap(lvl : int) : seq[seq[Etile]] =
     var lcount = 0
     for line in lines &"assets/maps/emaps/lvl{lvl}.txt":
         result.add @[]
@@ -257,14 +281,14 @@ const
     screenHeight = 768
     screenWidth = 1248
     numTilesVec = makevec2(screenWidth div tilesize, screenHeight div tilesize)
-    actionFloor = 3
+    actionFloor = 4
 
 InitWindow screenWidth, screenHeight, "TrailRun"
 SetTargetFPS 75
 
 let
     playerTex = LoadTexture "assets/sprites/Player.png"
-    tileTexArray = [LoadTexture "assets/sprites/BaseTile.png", LoadTexture "assets/sprites/LvlEndPortal.png"]
+    tileTexTable = toTable {GRND : LoadTexture "assets/sprites/BaseTile.png", GOAL : LoadTexture "assets/sprites/LvlEndPortal.png", WALL : LoadTexture "assets/sprites/WallTile.png"}
     trailTex = LoadTexture "assets/sprites/WalkedTile.png"
     enemyTex = LoadTexture "assets/sprites/Enemy.png"
 
@@ -291,9 +315,12 @@ var
 for loc in elocs:
     enemies.add(Enemy(pos : loc, npos : loc))
 
-func initLevel(emap : seq[seq[int]], enemies : var seq[Enemy], enemylocs : var seq[Vector2], plr : var Player, mvcount : var int, plrPosSeq : var seq[Vector2], timers : var seq[int]) =
+func initLevel(emap : seq[seq[Etile]], enemies : var seq[Enemy], enemylocs : var seq[Vector2], plr : var Player, mvcount : var int, plrPosSeq : var seq[Vector2], timers : var seq[int]) =
     (plr.pos, enemylocs) = findFromEmap emap
     plr.npos = makevec2(0, 0); plr.canMove = true
+    enemies = @[]
+    for loc in enemylocs:
+        enemies.add(Enemy(pos : loc, npos : loc))
     for i in 0..<enemies.len:
         enemies[i].pos = enemylocs[i]
         enemies[i].npos = enemylocs[i]
@@ -303,7 +330,7 @@ func initLevel(emap : seq[seq[int]], enemies : var seq[Enemy], enemylocs : var s
     for i in 0..<timers.len: timers[i] = 0
 
 
-proc loadLevel(lvl : int, map, emap : var seq[seq[int]], enemies : var seq[Enemy], enemylocs : var seq[Vector2], plr : var Player, mvcount : var int, plrPosSeq : var seq[Vector2], timers : var seq[int]) =
+proc loadLevel(lvl : int, map : var seq[seq[Tile]], emap : var seq[seq[Etile]], enemies : var seq[Enemy], enemylocs : var seq[Vector2], plr : var Player, mvcount : var int, plrPosSeq : var seq[Vector2], timers : var seq[int]) =
     emap = loadEmap lvl; map = loadMap lvl
     initLevel emap, enemies, elocs, plr, movecount, plrPosSeq, timers
 
@@ -346,7 +373,8 @@ while not WindowShouldClose():
     # Move and Animate Player and Enemies
     if plr.canMove:
         if movePlayer(plr, lastframekey, numTilesVec, movecount, spacecache, altcache, actionFloor) and plr.turnsLeftFrozen == 0:
-            moveEnemies enemies, plr.pos, map
+            moveEnemies enemies, plr.pos, map, plrPosSeq
+    var enemDeleteCache : HashSet[int]
     for i in 0..<enemies.len:
         if enemies[i].pos == plr.pos:
             if plr.kickingEnemies:
@@ -358,6 +386,12 @@ while not WindowShouldClose():
             else:
                 plr.canMove = false
                 plr.dead = true
+        if map[invert enemies[i].npos] == WALL and enemies[i].pos == enemies[i].npos:
+            enemDeleteCache.incl i
+    var deletions : int
+    for i in enemDeleteCache:
+        enemies.delete i - deletions
+        deletions += 1 
     playerAnim plr
     enemyAnim enemies
 
@@ -367,13 +401,13 @@ while not WindowShouldClose():
     # ---------------- #
 
     BeginDrawing()
-    renderMap map, tileTexArray, tilesize
+    renderMap map, tileTexTable, tilesize
     renderTrail plrPosSeq, trailTex, tilesize
     drawTexCenteredFromGrid playerTex, plr.pos, tilesize, WHITE
     renderEnemies enemies, enemyTex, tilesize
     EndDrawing()
 
-for tex in tileTexArray:
-    UnloadTexture tex
+for t in Tile:
+    UnloadTexture tileTexTable[t]
 UnloadTexture playertex, trailTex
 CloseWindow()
