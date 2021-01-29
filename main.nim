@@ -20,10 +20,11 @@ type
         dead : bool
         won : bool
         kicked : bool
+        typeId : int
     Tile = enum
         GRND, WALL, GOAL
     ETile = enum
-        NONE, PLR, EN1
+        NONE, PLRSPWN, EN1SPWN, EN2SPWN
 
     # --------------------------- #
     #       Grid Management       #
@@ -174,9 +175,10 @@ proc findPathBFS(start, target : Vector2, map : seq[seq[Tile]], plrPosSeq : seq[
     #       Entity Management       #
     # ----------------------------- #
 
-proc renderEnemies(enemies : seq[Enemy], enemyTex : Texture, tilesize : int) =
+proc renderEnemies(enemies : seq[Enemy], enemyTexArr : openArray[Texture], tilesize : int) =
     for e in enemies:
-        drawTexCenteredFromGrid enemyTex, e.pos, tilesize, WHITE
+        echo e.typeId
+        drawTexCenteredFromGrid enemyTexArr[e.typeId], e.pos, tilesize, WHITE
 
 proc enemyAnim(enemies : var seq[Enemy]) =
     for i in 0..<enemies.len:
@@ -225,26 +227,31 @@ func parseMapTile(c : char) : Tile =
 
 func parseEmapTile(c : char) : ETile =
     if c == '-': return NONE
-    if c == '#': return PLR
-    if c == '*': return EN1
+    if c == '#': return PLRSPWN
+    if c == '*': return EN1SPWN
 
 proc renderMap(map : seq[seq[Tile]], tileTexTable : Table[Tile, Texture], tilesize : int) =
     for i in 0..<map.len:
         for j in 0..<map[i].len:
-            drawTexFromGrid(tileTexTable[map[i][j]], makevec2(j, i), tilesize)
+            drawTexFromGrid(tileTexTable[map[i, j]], makevec2(j, i), tilesize)
 
 proc findFromMap(map : seq[seq[Tile]]) : Vector2 =
     for i in 0..<map.len:
         for j in 0..<map[i].len:
-            if map[i][j] == GOAL:
+            if map[i, j] == GOAL:
                 result = makevec2(j, i)
 
-proc findFromEmap(emap : seq[seq[Etile]]) : (Vector2, seq[Vector2]) =
+proc findFromEmap(emap : seq[seq[Etile]]) : (Vector2, seq[Vector2], seq[int]) =
     for i in 0..<emap.len:
         for j in 0..<emap[i].len:
-            if emap[i][j] != NONE:
-                if emap[i][j] == PLR: result[0] = makevec2(j, i)
-                if emap[i][j] == EN1: result[1].add makevec2(j, i)
+            if emap[i, j] != NONE:
+                if emap[i, j] == PLRSPWN: result[0] = makevec2(j, i)
+                if emap[i, j] == EN1SPWN: 
+                    result[1].add makevec2(j, i)
+                    result[2].add 0
+                if emap[i, j] == EN2SPWN:
+                    result[1].add makevec2(j, i)
+                    result[2].add 1
 
 proc renderTrail(trail : seq[Vector2], trailTex : Texture, tilesize : int) =
     for v in trail:
@@ -290,11 +297,11 @@ let
     playerTex = LoadTexture "assets/sprites/Player.png"
     tileTexTable = toTable {GRND : LoadTexture "assets/sprites/BaseTile.png", GOAL : LoadTexture "assets/sprites/LvlEndPortal.png", WALL : LoadTexture "assets/sprites/WallTile.png"}
     trailTex = LoadTexture "assets/sprites/WalkedTile.png"
-    enemyTex = LoadTexture "assets/sprites/Enemy.png"
+    enemyTexArray = [LoadTexture "assets/sprites/Enemy1.png"]
 
 
 var
-    plr = Player(pos : makevec2(0, 0), canMove : true)
+    plr = Player(canMove : true)
     lastframekey = KEY_F
     plrPosSeq : seq[Vector2]
     currentlv = 1
@@ -308,19 +315,20 @@ var
     movecount : int
     spacecache : bool
     altcache : bool
+    etypes : seq[int]
     timersToReset = @[deathTimer]
 
-(plr.pos, elocs) = findFromEmap emap
+(plr.pos, elocs, etypes) = findFromEmap emap
 
-for loc in elocs:
-    enemies.add(Enemy(pos : loc, npos : loc))
+for i, loc in elocs.pairs:
+    enemies.add(Enemy(pos : loc, npos : loc, typeId : etypes[i]))
 
-func initLevel(emap : seq[seq[Etile]], enemies : var seq[Enemy], enemylocs : var seq[Vector2], plr : var Player, mvcount : var int, plrPosSeq : var seq[Vector2], timers : var seq[int]) =
-    (plr.pos, enemylocs) = findFromEmap emap
+func initLevel(emap : seq[seq[Etile]], enemies : var seq[Enemy], enemylocs : var seq[Vector2], etypes : var seq[int], plr : var Player, mvcount : var int, plrPosSeq : var seq[Vector2], timers : var seq[int]) =
+    (plr.pos, enemylocs, etypes) = findFromEmap emap
     plr.npos = makevec2(0, 0); plr.canMove = true
     enemies = @[]
-    for loc in enemylocs:
-        enemies.add(Enemy(pos : loc, npos : loc))
+    for i, loc in enemylocs.pairs:
+        enemies.add(Enemy(pos : loc, npos : loc, typeId : etypes[i]))
     for i in 0..<enemies.len:
         enemies[i].pos = enemylocs[i]
         enemies[i].npos = enemylocs[i]
@@ -330,9 +338,9 @@ func initLevel(emap : seq[seq[Etile]], enemies : var seq[Enemy], enemylocs : var
     for i in 0..<timers.len: timers[i] = 0
 
 
-proc loadLevel(lvl : int, map : var seq[seq[Tile]], emap : var seq[seq[Etile]], enemies : var seq[Enemy], enemylocs : var seq[Vector2], plr : var Player, mvcount : var int, plrPosSeq : var seq[Vector2], timers : var seq[int]) =
+proc loadLevel(lvl : int, map : var seq[seq[Tile]], emap : var seq[seq[Etile]], enemies : var seq[Enemy], enemylocs : var seq[Vector2], enemtypes : var seq[int], plr : var Player, mvcount : var int, plrPosSeq : var seq[Vector2], timers : var seq[int]) =
     emap = loadEmap lvl; map = loadMap lvl
-    initLevel emap, enemies, elocs, plr, movecount, plrPosSeq, timers
+    initLevel emap, enemies, enemylocs, enemtypes, plr, movecount, plrPosSeq, timers
 
 while not WindowShouldClose():
     ClearBackground RAYWHITE
@@ -347,7 +355,7 @@ while not WindowShouldClose():
     
     if not plr.canMove and plr.dead:
         if deathTimer == 5:
-            initLevel emap, enemies, elocs, plr, movecount, plrPosSeq, timersToReset
+            initLevel emap, enemies, elocs, etypes, plr, movecount, plrPosSeq, timersToReset
             deathTimer = 0
         deathTimer += 1
     
@@ -360,7 +368,7 @@ while not WindowShouldClose():
         if winTimer == 10:
             plr.won = false
             currentlv += 0
-            loadLevel currentlv, map, emap, enemies, elocs, plr, movecount, plrPosSeq, timersToReset
+            loadLevel currentlv, map, emap, enemies, elocs, etypes, plr, movecount, plrPosSeq, timersToReset
             winTimer = 0
         else: winTimer += 1
     
@@ -404,7 +412,7 @@ while not WindowShouldClose():
     renderMap map, tileTexTable, tilesize
     renderTrail plrPosSeq, trailTex, tilesize
     drawTexCenteredFromGrid playerTex, plr.pos, tilesize, WHITE
-    renderEnemies enemies, enemyTex, tilesize
+    renderEnemies enemies, enemyTexArray, tilesize
     EndDrawing()
 
 for t in Tile:
