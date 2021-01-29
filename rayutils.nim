@@ -1,4 +1,4 @@
-import raylib, math, hashes
+import raylib, math, hashes, sugar
 
 const colorArr* : array[25, Color] = [LIGHTGRAY, GRAY, DARKGRAY, YELLOW, GOLD, ORANGE, PINK, RED, MAROON, GREEN, LIME, DARKGREEN, SKYBLUE, BLUE, DARKBLUE, PURPLE, VIOLET, DARKPURPLE, BEIGE, BROWN, DARKBROWN, WHITE, BLACK, MAGENTA, RAYWHITE]
 
@@ -30,17 +30,23 @@ func grEqCeil*(n : int | float | float32) : int | float | float32 =
 func grEqCeil*(v : Vector2) : Vector2 =
     return makevec2(grEqCeil v.x, grEqCeil v.y)
 
-proc `[]`*[T](container : seq[seq[T]], v : Vector2) : T =
-    return container[v.x][v.y]
+func `[]`*[T](container : seq[seq[T]], v : Vector2) : T =
+    return container[int v.x][int v.y]
 
-proc `[]`*[T](container : seq[seq[T]], x, y : int | float | float32) : T =
+func `[]`*[T](container : seq[seq[T]], x, y : int | float | float32) : T =
     return container[int x][int y]
 
-proc round*(v : Vector2) : Vector2 = 
+func apply*(v : Vector2, op : (float32) -> float32) : Vector2 =
+    return makevec2(op v.x, op v.y)
+
+func round*(v : Vector2) : Vector2 = 
     return makevec2(round v.x, round v.y)
 
-proc roundDown*(v : Vector2) : Vector2 =
+func roundDown*(v : Vector2) : Vector2 =
     return makevec2(float32 int v.x, float32 int v.y)
+
+proc roundDown*(n : float | float32) : float | float32 =
+    return float int n
 
 proc drawTexCentered*(tex : Texture, pos : Vector2, tint : Color) =
     tex.DrawTexture(int pos.x + tex.width / 2, int pos.y + tex.height / 2, tint)
@@ -106,6 +112,8 @@ func cart2Polar*(v : Vector2, c = Vector2(x : 0, y : 0)) : Vector2 =
     result.x = sqrt((v.x ^ 2) + (v.y ^ 2)) 
     result.y = arctan(v.y / v.x)
 
+func invert*(v : Vector2) : Vector2 = 
+    return makevec2(v.y, v.x)
 
 func dist*(v, v2 : Vector2) : float = 
     return abs sqrt(((v.x - v2.x) ^ 2) + ((v.y - v2.y) ^ 2))
