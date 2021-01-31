@@ -1,4 +1,4 @@
-import raylib, os, lenientops, rayutils, math, strformat, deques, sets, tables, sugar, random
+import raylib, os, lenientops, rayutils, math, strformat, deques, sets, tables, random
 
 randomize()
 
@@ -60,24 +60,22 @@ func playerAnim(plr : var Player) =
         plr.pos = plr.npos
 
 proc checkFreeze(plr : var Player, movecount : var int, actionFloor : int, spacepressed, altpressed : var bool ) =
-
-    echo movecount, " -> ", actionFloor
     if spacepressed and movecount >= actionFloor:
         plr.kickingEnemies = true
-        plr.kickPower = movecount div actionFloor
-        movecount = 0
+        plr.kickPower = 1
+        movecount += -actionFloor
         spacepressed = false
-    elif altpressed and movecount >= actionFloor + 2:
-        plr.turnsLeftFrozen = 1
-        movecount = 0
-        altpressed = false
     else:
         if plr.turnsLeftFrozen > 0:
             plr.turnsLeftFrozen += -1
         if spacepressed:
             spacepressed = false
+            plr.kickingEnemies = false
+            plr.kickPower = 0
         if altpressed:
             altpressed = false
+    echo "Score : ", movecount
+
 
 proc movePlayer(plr : var Player, lfkey : var KeyboardKey, numtilesVec : Vector2, mvcount : var int, spacepressed, altpressed : var bool, freezeMoveFloor : int) : bool =
     if IsKeyDown(KEY_A) or IsKeyDown(KEY_LEFT):
@@ -124,7 +122,7 @@ proc movePlayer(plr : var Player, lfkey : var KeyboardKey, numtilesVec : Vector2
         result = false
     plr.npos = anticlamp(clamp(plr.npos, numTilesVec - 1), makevec2(0, 0))
     if result:
-        if plr.turnsLeftFrozen == 0 and plr.kickingEnemies == false: mvcount += 1 
+        mvcount += 1 
         checkFreeze plr, mvcount, freezeMoveFloor, spacepressed, altpressed
 
     # ----------------------- #
@@ -192,51 +190,61 @@ proc enemyAnim(enemies : var seq[Enemy]) =
         if abs(enemies[i].pos - enemies[i].npos) <& 0.1:
             enemies[i].pos = enemies[i].npos
 
-proc moveEnemies(enemies : var seq[Enemy], plr : Player, map : seq[seq[Tile]], plrPosSeq : seq[Vector2]) =
+proc moveEnemT1(enemies : var seq[Enemy], plr : Player, map : seq[seq[Tile]], plrPosSeq : seq[Vector2], mvcount : int) =
     let target = plr.pos
     let ntarget = plr.npos
     for i in 0..<enemies.len:
+        let tarpath = findPathBFS(round enemies[i].pos, grEqCeil target, map, plrPosSeq)
         if enemies[i].typeId == 0:
-            let tarpath = findPathBFS(round enemies[i].pos, grEqCeil target, map, plrPosSeq)
             if tarpath.len > 1 and not enemies[i].kicked:
                 let dir = tarpath[1] - enemies[i].pos
-                var weight = rand(100)
-                if weight < 65: enemies[i].npos = tarpath[1]
-                elif weight < 80:
+                var weight : int
+                if mvcount mod 3 == 0: weight = rand(80..100)
+                else: weight = rand(100)
+                if weight < 84: enemies[i].npos = tarpath[1]
+                elif weight < 94:
                     let ntarpath = findPathBFS(round enemies[i].pos, grEqCeil ntarget, map, plrPosSeq)
                     if ntarpath.len > 1:
                         enemies[i].npos = ntarpath[1]
                     else: enemies[i].npos = tarpath[1]
-                elif weight < 93:
+                elif weight < 96:
                     let nposcache = enemies[i].pos - invert dir
                     if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL:
                         enemies[i].npos = nposcache
                     else: weight += 5
-                elif weight < 96:
+                elif weight < 99:
                     let nposcache = enemies[i].pos + invert dir
                     if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL:
                         enemies[i].npos = nposcache
-        elif enemies[i].typeId == 1:
-            var weight = rand(100)
-            if weight < 20: 
-                let nposcache = enemies[i].pos + makevec2(0, 1)
-                if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL:
-                    enemies[i].npos = nposcache
-                else: weight += 20
-            elif weight < 40:
-                let nposcache = enemies[i].pos - makevec2(0, 1)
-                if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL:
-                    enemies[i].npos = nposcache
-                else: weight += 20
-            elif weight < 60:
-                let nposcache = enemies[i].pos + makevec2(1, 0)
-                if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL:
-                    enemies[i].npos = nposcache
-                else: weight += 20
-            elif weight < 80:
-                let nposcache = enemies[i].pos - makevec2(1, 0)
-                if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL:
-                    enemies[i].npos = nposcache  
+
+proc moveEnemT2(enemies : var seq[Enemy], plr : Player, map : seq[seq[Tile]], plrPosSeq : seq[Vector2], mvcount : int) =
+    let target = plr.pos
+    for i in 0..<enemies.len:
+        let tarpath = findPathBFS(round enemies[i].pos, grEqCeil target, map, plrPosSeq)
+        if enemies[i].typeId == 1:
+            if tarpath.len > 1 and not enemies[i].kicked:
+                var weight = rand(100)
+                if weight < 30:
+                    enemies[i].npos = tarpath[1]
+                if weight < 46: 
+                    let nposcache = enemies[i].pos + makevec2(0, 1)
+                    if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL:
+                        enemies[i].npos = nposcache
+                    else: weight += 16
+                elif weight < 62:
+                    let nposcache = enemies[i].pos - makevec2(0, 1)
+                    if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL:
+                        enemies[i].npos = nposcache
+                    else: weight += 16
+                elif weight < 78:
+                    let nposcache = enemies[i].pos + makevec2(1, 0)
+                    if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL:
+                        enemies[i].npos = nposcache
+                    else: weight += 16
+                elif weight < 94:
+                    let nposcache = enemies[i].pos - makevec2(1, 0)
+                    if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL:
+                        enemies[i].npos = nposcache 
 
     # -------------------------- #
     #       Map Management       #
@@ -311,7 +319,7 @@ const
     screenHeight = 768
     screenWidth = 1248
     numTilesVec = makevec2(screenWidth div tilesize, screenHeight div tilesize)
-    actionFloor = 4
+    actionFloor = 10
 
 InitWindow screenWidth, screenHeight, "TrailRun"
 SetTargetFPS 75
@@ -340,6 +348,7 @@ var
     altcache : bool
     etypes : seq[int]
     timersToReset = @[deathTimer]
+    finalmvcnt : int
 
 (plr.pos, elocs, etypes) = findFromEmap emap
 
@@ -356,7 +365,6 @@ func initLevel(emap : seq[seq[Etile]], enemies : var seq[Enemy], enemylocs : var
         enemies[i].pos = enemylocs[i]
         enemies[i].npos = enemylocs[i]
     plr.turnsLeftFrozen = 0
-    mvcount = 0
     plrPosSeq = @[]
     for i in 0..<timers.len: timers[i] = 0
 
@@ -379,20 +387,25 @@ while not WindowShouldClose():
     if not plr.canMove and plr.dead:
         if deathTimer == 5:
             initLevel emap, enemies, elocs, etypes, plr, movecount, plrPosSeq, timersToReset
+            movecount = 0
             deathTimer = 0
         deathTimer += 1
     
     # Check if player has reached the end goal
     if plr.npos == lvenloc:
         plr.won = true
+        finalmvcnt = movecount
 
     if plr.won:
+        deathTimer = 0
         plr.canMove = false
         if winTimer == 10:
+            echo &"Win! Score : {finalmvcnt}"
             plr.won = false
             currentlv += 0
             loadLevel currentlv, map, emap, enemies, elocs, etypes, plr, movecount, plrPosSeq, timersToReset
             winTimer = 0
+            finalmvcnt = 0
         else: winTimer += 1
     
     # Cache buttons pressed
@@ -404,14 +417,14 @@ while not WindowShouldClose():
     # Move and Animate Player and Enemies
     if plr.canMove:
         if movePlayer(plr, lastframekey, numTilesVec, movecount, spacecache, altcache, actionFloor) and plr.turnsLeftFrozen == 0:
-            moveEnemies enemies, plr, map, plrPosSeq
+            moveEnemT1 enemies, plr, map, plrPosSeq, movecount
+            moveEnemT2 enemies, plr, map, plrPosSeq, movecount
     var enemDeleteCache : HashSet[int]
     for i in 0..<enemies.len:
         if enemies[i].pos == plr.pos:
             if plr.kickingEnemies:
                 enemies[i].npos = round enemies[i].pos + normalize(plrPosSeq[^1] - plrPosSeq[^2]) * (plr.kickPower + 1) 
                 enemies[i].kicked = true
-                movecount = 0
                 plr.kickingEnemies = false
                 plr.kickPower = 0
             else:
