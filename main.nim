@@ -369,8 +369,9 @@ func initLevel(emap : seq[seq[Etile]], enemies : var seq[Enemy], enemylocs : var
     for i in 0..<timers.len: timers[i] = 0
 
 
-proc loadLevel(lvl : int, map : var seq[seq[Tile]], emap : var seq[seq[Etile]], enemies : var seq[Enemy], enemylocs : var seq[Vector2], enemtypes : var seq[int], plr : var Player, mvcount : var int, plrPosSeq : var seq[Vector2], timers : var seq[int]) =
+proc loadLevel(lvl : int, map : var seq[seq[Tile]], emap : var seq[seq[Etile]], enemies : var seq[Enemy], enemylocs : var seq[Vector2], enemtypes : var seq[int], plr : var Player, mvcount : var int, plrPosSeq : var seq[Vector2], timers : var seq[int], lvenloc : var Vector2) =
     emap = loadEmap lvl; map = loadMap lvl
+    lvenloc = findFromMap map
     initLevel emap, enemies, enemylocs, enemtypes, plr, movecount, plrPosSeq, timers
 
 while not WindowShouldClose():
@@ -402,8 +403,9 @@ while not WindowShouldClose():
         if winTimer == 10:
             echo &"Win! Score : {finalmvcnt}"
             plr.won = false
-            currentlv += 0
-            loadLevel currentlv, map, emap, enemies, elocs, etypes, plr, movecount, plrPosSeq, timersToReset
+            if currentlv < 2: currentlv += 1
+            else: currentlv += -1
+            loadLevel currentlv, map, emap, enemies, elocs, etypes, plr, movecount, plrPosSeq, timersToReset, lvenloc
             winTimer = 0
             finalmvcnt = 0
         else: winTimer += 1
@@ -430,7 +432,7 @@ while not WindowShouldClose():
             else:
                 plr.canMove = false
                 plr.dead = true
-        if map[invert enemies[i].npos] == WALL and enemies[i].pos == enemies[i].npos:
+        if map[invert enemies[i].npos] == WALL:
             enemDeleteCache.incl i
     var deletions : int
     for i in enemDeleteCache:
