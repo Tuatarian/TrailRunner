@@ -59,11 +59,11 @@ func playerAnim(plr : var Player) =
     if abs(plr.pos - plr.npos) <& 0.1: 
         plr.pos = plr.npos
 
-proc checkFreeze(plr : var Player, movecount : var int, actionFloor : int, spacepressed, altpressed : var bool ) =
-    if spacepressed and movecount >= actionFloor:
+proc checkFreeze(plr : var Player, movecount : var int, actionAmt : var int, spacepressed, altpressed : var bool ) =
+    echo actionAmt, " -> ", spacepressed
+    if spacepressed and actionAmt > 0:
         plr.kickingEnemies = true
         plr.kickPower = 1
-        movecount += -actionFloor
         spacepressed = false
     else:
         if plr.turnsLeftFrozen > 0:
@@ -74,15 +74,14 @@ proc checkFreeze(plr : var Player, movecount : var int, actionFloor : int, space
             plr.kickPower = 0
         if altpressed:
             altpressed = false
-    echo "Score : ", movecount
 
 
-proc movePlayer(plr : var Player, lfkey : var KeyboardKey, numtilesVec : Vector2, mvcount : var int, spacepressed, altpressed : var bool, freezeMoveFloor : int) : bool =
+proc movePlayer(plr : var Player, lfkey : var KeyboardKey, numtilesVec : Vector2, mvcount : var int, actionAmt : var int, spacepressed, altpressed : var bool, map : seq[seq[Tile]]) : bool =
     if IsKeyDown(KEY_A) or IsKeyDown(KEY_LEFT):
         if lfkey == KEY_LEFT:
             lfkey = KEY_LEFT
             result = false
-        else:
+        elif map[invert anticlamp(clamp(invert makevec2(plr.npos.y, plr.npos.x - 1), numTilesVec - 1), makevec2(0, 0))] != WALL:
             plr.npos.x += -1
             lfkey = KEY_LEFT
             result = true
@@ -90,7 +89,7 @@ proc movePlayer(plr : var Player, lfkey : var KeyboardKey, numtilesVec : Vector2
         if lfkey == KEY_RIGHT:
             lfkey = KEY_RIGHT
             result = false
-        else:
+        elif map[invert anticlamp(clamp(invert makevec2(plr.npos.y, plr.npos.x + 1), numTilesVec - 1), makevec2(0, 0))] != WALL:
             plr.npos.x += 1
             lfkey = KEY_RIGHT
             result = true
@@ -98,7 +97,7 @@ proc movePlayer(plr : var Player, lfkey : var KeyboardKey, numtilesVec : Vector2
         if lfkey == KEY_UP:
             lfkey = KEY_UP
             result = false
-        else:
+        elif map[invert anticlamp(clamp(invert makevec2(plr.npos.y - 1, plr.npos.x), numTilesVec - 1), makevec2(0, 0))] != WALL:
             plr.npos.y += -1
             lfkey = KEY_UP
             result = true
@@ -106,7 +105,7 @@ proc movePlayer(plr : var Player, lfkey : var KeyboardKey, numtilesVec : Vector2
         if lfkey == KEY_DOWN:
             lfkey = KEY_DOWN
             result = false
-        else:
+        elif map[invert anticlamp(clamp(invert makevec2(plr.npos.y + 1, plr.npos.x), numTilesVec - 1), makevec2(0, 0))] != WALL:
             plr.npos.y += 1
             lfkey = KEY_DOWN
             result = true
@@ -123,13 +122,13 @@ proc movePlayer(plr : var Player, lfkey : var KeyboardKey, numtilesVec : Vector2
     plr.npos = anticlamp(clamp(plr.npos, numTilesVec - 1), makevec2(0, 0))
     if result:
         mvcount += 1 
-        checkFreeze plr, mvcount, freezeMoveFloor, spacepressed, altpressed
+        checkFreeze plr, mvcount, actionAmt, spacepressed, altpressed
 
     # ----------------------- #
     #       Pathfinding       #
     # ----------------------- #
 
-proc getNeighbors(v : Vector2, map : seq[seq[Tile]], target : Vector2, plrPosSeq : seq[Vector2]) : seq[Vector2] =
+func getNeighborPos(v : Vector2, map : seq[seq[Tile]]) : seq[Vector2] =
     let v = makevec2(v.y, v.x)
     if v.x < map.len - 1:
         if map[v.x + 1, v.y] != WALL:
@@ -144,6 +143,16 @@ proc getNeighbors(v : Vector2, map : seq[seq[Tile]], target : Vector2, plrPosSeq
         if map[v.x, v.y - 1] != WALL:
             result.add makevec2(v.y - 1, v.x)
 
+func getNeighborTiles[T](map : seq[seq[T]], y, x : int) : seq[T] =
+    if y < map.len - 1:
+        result.add map[y + 1, x]
+    if y > 0:
+        result.add map[y - 1, x]
+    if x < map[0].len - 1:
+        result.add map[y, x + 1]
+    if x > 0:
+        result.add map[y, x - 1]
+
 
 proc findPathBFS(start, target : Vector2, map : seq[seq[Tile]], plrPosSeq : seq[Vector2]) : seq[Vector2] =
     var fillEdge : Deque[Vector2]
@@ -153,7 +162,7 @@ proc findPathBFS(start, target : Vector2, map : seq[seq[Tile]], plrPosSeq : seq[
     while fillEdge.len > 0:
         let curpos = fillEdge.popFirst
         if curpos == target: break
-        for c in getNeighbors(curpos, map, target, plrPosSeq):
+        for c in getNeighborPos(curpos, map):
             if c notin traceTable:
                 traceTable[c] = curpos
                 fillEdge.addLast c
@@ -288,6 +297,32 @@ proc renderTrail(trail : seq[Vector2], trailTex : Texture, tilesize : int) =
     for v in trail:
         drawTexFromGrid trailTex, v, tilesize
 
+    # -------------------------- #
+    #       Map Generation       #
+    # -------------------------- #
+
+proc cellAutomaton(iters : int, wallaciousness : int) : seq[seq[Tile]] =
+    result = genSeqSeq(8, 13, GRND)
+    for j in 0..<result.len:
+        for i in 0..<result[j].len:
+            let weight = rand(100)
+            if weight < wallaciousness:
+                result[j, i] = WALL
+    for itr in 0..iters:
+        for j in 0..<result.len:
+            for i in 0..<result[j].len:
+                var liveNeighbors : int
+                for c in result.getNeighborTiles(j, i):
+                    if c != WALL: liveNeighbors += 1
+                if liveNeighbors in 2..3:
+                    if result[j, i] != WALL:
+                        discard
+                    elif liveNeighbors == 3:
+                        result[j, i] = WALL
+                elif result[j, i] == WALL:
+                    result[j, i] = GRND
+
+
 
     # ----------------------- #
     #       Import Maps       #
@@ -330,6 +365,11 @@ let
     trailTex = LoadTexture "assets/sprites/WalkedTile.png"
     enemyTexArray = [LoadTexture "assets/sprites/Enemy1.png", LoadTexture "assets/sprites/Enemy2.png"]
 
+proc genMap(iters, wallaciousness : int, goalLoc : Vector2) : seq[seq[Tile]] =
+    result = cellAutomaton(iters, wallaciousness)
+    if goalLoc.x == -1:
+        result[rand(result.len - 1), rand(result[0].len - 1)] = GOAL
+    else: result[invert goalLoc] = GOAL
 
 var
     plr = Player(canMove : true)
@@ -338,7 +378,7 @@ var
     currentlv = 1
     deathTimer : int
     winTimer : int
-    map = loadMap 1
+    map = genMap(20, 30, makevec2(-1, -1))
     emap = loadEmap 1 
     elocs : seq[Vector2]
     lvenloc = findFromMap map
@@ -346,16 +386,21 @@ var
     movecount : int
     spacecache : bool
     altcache : bool
+    genTimer : int
+    rcache : bool
     etypes : seq[int]
-    timersToReset = @[deathTimer]
+    timersToReset = @[deathTimer, genTimer]
     finalmvcnt : int
+    actionAmt = 3
 
 (plr.pos, elocs, etypes) = findFromEmap emap
 
 for i, loc in elocs.pairs:
     enemies.add(Enemy(pos : loc, npos : loc, typeId : etypes[i]))
 
-func initLevel(emap : seq[seq[Etile]], enemies : var seq[Enemy], enemylocs : var seq[Vector2], etypes : var seq[int], plr : var Player, mvcount : var int, plrPosSeq : var seq[Vector2], timers : var seq[int]) =
+
+proc initLevel(emap : seq[seq[Etile]], enemies : var seq[Enemy], enemylocs : var seq[Vector2], etypes : var seq[int], plr : var Player, mvcount : var int, lvenloc : Vector2, plrPosSeq : var seq[Vector2], timers : var seq[int]) =
+    map = genMap(20, 30, makevec2(-1, -1))
     (plr.pos, enemylocs, etypes) = findFromEmap emap
     plr.npos = makevec2(0, 0); plr.canMove = true
     enemies = @[]
@@ -370,44 +415,46 @@ func initLevel(emap : seq[seq[Etile]], enemies : var seq[Enemy], enemylocs : var
 
 
 proc loadLevel(lvl : int, map : var seq[seq[Tile]], emap : var seq[seq[Etile]], enemies : var seq[Enemy], enemylocs : var seq[Vector2], enemtypes : var seq[int], plr : var Player, mvcount : var int, plrPosSeq : var seq[Vector2], timers : var seq[int], lvenloc : var Vector2) =
-    emap = loadEmap lvl; map = loadMap lvl
+    emap = loadEmap lvl
+    initLevel(emap, enemies, enemylocs, enemtypes, plr, movecount, lvenloc, plrPosSeq, timers)
     lvenloc = findFromMap map
-    initLevel emap, enemies, enemylocs, enemtypes, plr, movecount, plrPosSeq, timers
-
 while not WindowShouldClose():
     ClearBackground RAYWHITE
+        
 
     # Check if player walked on trail
-    if plrPosSeq.len > 1:
-        if plr.npos in plrPosSeq[0..^2]:
-            plr.canMove = false
-            plr.dead = true
+    # if plrPosSeq.len > 1:
+    #     if plr.npos in plrPosSeq[0..^2]:
+    #         plr.canMove = false
+    #         plr.dead = true
     if plr.npos notin plrPosSeq:
         plrPosSeq.add plr.npos
     
     if not plr.canMove and plr.dead:
+        finalmvcnt = movecount
         if deathTimer == 5:
-            initLevel emap, enemies, elocs, etypes, plr, movecount, plrPosSeq, timersToReset
+            echo &"Run ended! Score : {currentlv} | {finalmvcnt}"
+            loadLevel currentlv, map, emap, enemies, elocs, etypes, plr, movecount, plrPosSeq, timersToReset, lvenloc
             movecount = 0
             deathTimer = 0
+            actionAmt = 3
         deathTimer += 1
     
     # Check if player has reached the end goal
     if plr.npos == lvenloc:
         plr.won = true
-        finalmvcnt = movecount
 
     if plr.won:
         deathTimer = 0
         plr.canMove = false
         if winTimer == 10:
-            echo &"Win! Score : {finalmvcnt}"
             plr.won = false
             if currentlv < 2: currentlv += 1
             else: currentlv += -1
             loadLevel currentlv, map, emap, enemies, elocs, etypes, plr, movecount, plrPosSeq, timersToReset, lvenloc
             winTimer = 0
             finalmvcnt = 0
+            actionAmt = 3
         else: winTimer += 1
     
     # Cache buttons pressed
@@ -416,28 +463,46 @@ while not WindowShouldClose():
     if IsKeyDown(KEY_LEFT_ALT) or IsKeyDown(KEY_RIGHT_ALT):
         altcache = true
     
+    if IsKeyDown(KEY_R):
+        rcache = true
+    
+    if rcache:
+        if genTimer >= 5:
+            map = genMap(25, 30, lvenloc)
+            movecount = 0
+            deathTimer = 0
+            actionAmt = 3
+            rcache = false
+        else: gentimer += 1
+
     # Move and Animate Player and Enemies
     if plr.canMove:
-        if movePlayer(plr, lastframekey, numTilesVec, movecount, spacecache, altcache, actionFloor) and plr.turnsLeftFrozen == 0:
+        if movePlayer(plr, lastframekey, numTilesVec, movecount, actionAmt, spacecache, altcache, map):
             moveEnemT1 enemies, plr, map, plrPosSeq, movecount
             moveEnemT2 enemies, plr, map, plrPosSeq, movecount
+    var kicked : bool
     var enemDeleteCache : HashSet[int]
     for i in 0..<enemies.len:
         if enemies[i].pos == plr.pos:
             if plr.kickingEnemies:
-                enemies[i].npos = round enemies[i].pos + normalize(plrPosSeq[^1] - plrPosSeq[^2]) * (plr.kickPower + 1) 
-                enemies[i].kicked = true
-                plr.kickingEnemies = false
-                plr.kickPower = 0
+                discard
+                # kicked = true
+                # echo "k => ", i
+                # enemies[i].npos = round enemies[i].pos + normalize(plrPosSeq[^1] - plrPosSeq[^2]) * (plr.kickPower + 1) 
+                # enemies[i].kicked = true
+                # plr.kickPower = 0
             else:
                 plr.canMove = false
                 plr.dead = true
-        if map[invert enemies[i].npos] == WALL:
+        if map[invert enemies[i].pos] == WALL and enemies[i].pos == roundDown enemies[i].pos:
             enemDeleteCache.incl i
+    if kicked:
+        actionAmt += -1
+        plr.kickingEnemies = false
     var deletions : int
-    for i in enemDeleteCache:
-        enemies.delete i - deletions
-        deletions += 1 
+    # for i in enemDeleteCache:
+    #     enemies.delete i - deletions
+    #     deletions += 1 
     playerAnim plr
     enemyAnim enemies
 
@@ -448,7 +513,7 @@ while not WindowShouldClose():
 
     BeginDrawing()
     renderMap map, tileTexTable, tilesize
-    renderTrail plrPosSeq, trailTex, tilesize
+    # renderTrail plrPosSeq, trailTex, tilesize
     drawTexCenteredFromGrid playerTex, plr.pos, tilesize, WHITE
     renderEnemies enemies, enemyTexArray, tilesize
     EndDrawing()
