@@ -1,5 +1,6 @@
 import raylib, math, hashes, sugar
 
+
 const colorArr* : array[25, Color] = [LIGHTGRAY, GRAY, DARKGRAY, YELLOW, GOLD, ORANGE, PINK, RED, MAROON, GREEN, LIME, DARKGREEN, SKYBLUE, BLUE, DARKBLUE, PURPLE, VIOLET, DARKPURPLE, BEIGE, BROWN, DARKBROWN, WHITE, BLACK, MAGENTA, RAYWHITE]
 
 proc UnloadTexture*(texargs : varargs[Texture]) =
@@ -35,6 +36,18 @@ func `[]`*[T](container : seq[seq[T]], v : Vector2) : T =
 
 func `[]`*[T](container : seq[seq[T]], x, y : int | float | float32) : T =
     return container[int x][int y]
+
+func `[]=`*[T](container : var seq[seq[T]], x, y : int | float | float32, d : T) =
+    container[int x][int y] = d
+
+func `[]=`*[T](container : var seq[seq[T]], v : Vector2, d : T) =
+    container[int v.x][int v.y] = d
+
+func genSeqSeq*[T](y, x : int, val : T) : seq[seq[T]] = ## return a seq[seq[T]] populated with the given value. X and Y are reversed like with matrices
+    for i in 0..<y:
+        result.add @[]
+        for j in 0..<x:
+            result[i].add(val)
 
 func apply*(v : Vector2, op : (float32) -> float32) : Vector2 =
     return makevec2(op v.x, op v.y)
