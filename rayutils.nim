@@ -1,5 +1,7 @@
 import raylib, math, hashes, sugar
 
+func sigmoid*(x : int | float, a : int | float = 1, b : int | float = E, h : int | float = 0, k : int | float = 0) : float =
+    return a * 1/(1 + pow(E, h * x)) + k
 
 const colorArr* : array[25, Color] = [LIGHTGRAY, GRAY, DARKGRAY, YELLOW, GOLD, ORANGE, PINK, RED, MAROON, GREEN, LIME, DARKGREEN, SKYBLUE, BLUE, DARKBLUE, PURPLE, VIOLET, DARKPURPLE, BEIGE, BROWN, DARKBROWN, WHITE, BLACK, MAGENTA, RAYWHITE]
 
