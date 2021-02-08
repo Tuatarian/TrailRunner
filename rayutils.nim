@@ -1,48 +1,48 @@
 import raylib, math, hashes, sugar
 
-func sigmoid*(x : int | float, a : int | float = 1, b : int | float = E, h : int | float = 0, k : int | float = 0) : float =
+func sigmoid*(x : int | float, a : int | float = 1, b : int | float = E, h : int | float = 0, k : int | float = 0) : float = ## Sigmoid in the form a(1/1 + e^(hx)) + k
     return a * 1/(1 + pow(E, h * x)) + k
 
-const colorArr* : array[25, Color] = [LIGHTGRAY, GRAY, DARKGRAY, YELLOW, GOLD, ORANGE, PINK, RED, MAROON, GREEN, LIME, DARKGREEN, SKYBLUE, BLUE, DARKBLUE, PURPLE, VIOLET, DARKPURPLE, BEIGE, BROWN, DARKBROWN, WHITE, BLACK, MAGENTA, RAYWHITE]
+const colorArr* : array[25, Color] = [LIGHTGRAY, GRAY, DARKGRAY, YELLOW, GOLD, ORANGE, PINK, RED, MAROON, GREEN, LIME, DARKGREEN, SKYBLUE, BLUE, DARKBLUE, PURPLE, VIOLET, DARKPURPLE, BEIGE, BROWN, DARKBROWN, WHITE, BLACK, MAGENTA, RAYWHITE] ## Array of all rl colours
 
-proc UnloadTexture*(texargs : varargs[Texture]) =
+proc UnloadTexture*(texargs : varargs[Texture]) = ## runs UnloadTexture for each vararg
     for tex in texargs:
         UnloadTexture tex
 
-func toTuple*(v : Vector2) : (float32, float32) =
+func toTuple*(v : Vector2) : (float32, float32) = ## Returns (x, y)
     return (v.x, v.y) 
 
-func makevec2*(x, y: float | float32 | int) : Vector2 =
+func makevec2*(x, y: float | float32 | int) : Vector2 =  ## Easy vec2 constructor
     result.x = float x
     result.y = float y
 
-func clamp*(v, v2 : Vector2) : Vector2 =
+func clamp*(v, v2 : Vector2) : Vector2 = ## Returns min of x and min of y 
     return makevec2(min(v.x, v2.x), min(v.y, v2.y))
 
-func antiClamp*(v, v2 : Vector2) : Vector2 =
+func antiClamp*(v, v2 : Vector2) : Vector2 = ## Returns max of x and max of y
     return makevec2(max(v.x, v2.x), max(v.y, v2.y))
 
-func ceil*(v : Vector2) : Vector2 =
+func ceil*(v : Vector2) : Vector2 = ## Returns ceil x, ceil y
     return makevec2(ceil v.x, ceil v.y)
 
-func grEqCeil*(n : int | float | float32) : int | float | float32 =
+func grEqCeil*(n : int | float | float32) : int | float | float32 = ## Ceil but inclusive
     if n == n.int.float:
         return n
     return ceil(n)
 
-func grEqCeil*(v : Vector2) : Vector2 =
+func grEqCeil*(v : Vector2) : Vector2 = ## Returns vec2 with x and y grEqCeiled
     return makevec2(grEqCeil v.x, grEqCeil v.y)
 
-func `[]`*[T](container : seq[seq[T]], v : Vector2) : T =
+func `[]`*[T](container : seq[seq[T]], v : Vector2) : T = ## Vector2 access to 2d arrays
     return container[int v.x][int v.y]
 
-func `[]`*[T](container : seq[seq[T]], x, y : int | float | float32) : T =
+func `[]`*[T](container : seq[seq[T]], x, y : int | float | float32) : T = ## [i, j] access to 2d arrays
     return container[int x][int y]
 
-func `[]=`*[T](container : var seq[seq[T]], x, y : int | float | float32, d : T) =
+func `[]=`*[T](container : var seq[seq[T]], x, y : int | float | float32, d : T) = ## [i, j] setter for 2d arrays
     container[int x][int y] = d
 
-func `[]=`*[T](container : var seq[seq[T]], v : Vector2, d : T) =
+func `[]=`*[T](container : var seq[seq[T]], v : Vector2, d : T) = ## Vector2 setter for 2d arrays
     container[int v.x][int v.y] = d
 
 func genSeqSeq*[T](y, x : int, val : T) : seq[seq[T]] = ## return a seq[seq[T]] populated with the given value. X and Y are reversed like with matrices
@@ -51,25 +51,25 @@ func genSeqSeq*[T](y, x : int, val : T) : seq[seq[T]] = ## return a seq[seq[T]] 
         for j in 0..<x:
             result[i].add(val)
 
-func apply*(v : Vector2, op : (float32) -> float32) : Vector2 =
+func apply*(v : Vector2, op : (float32) -> float32) : Vector2 = ## runs proc on x and y
     return makevec2(op v.x, op v.y)
 
-func round*(v : Vector2) : Vector2 = 
+func round*(v : Vector2) : Vector2 = ## round x, round y
     return makevec2(round v.x, round v.y)
 
-func roundDown*(v : Vector2) : Vector2 =
+func roundDown*(v : Vector2) : Vector2 = ## rounds down x and y
     return makevec2(float32 int v.x, float32 int v.y)
 
-proc roundDown*(n : float | float32) : float | float32 =
+proc roundDown*(n : float | float32) : float | float32 = ## rounds down
     return float int n
 
-proc drawTexCentered*(tex : Texture, pos : Vector2, tint : Color) =
+proc drawTexCentered*(tex : Texture, pos : Vector2, tint : Color) = ## Draws Texture from center
     tex.DrawTexture(int pos.x + tex.width / 2, int pos.y + tex.height / 2, tint)
 
-proc drawTexCentered*(tex : Texture, posx, posy : int | float | float32, tint : Color) =
+proc drawTexCentered*(tex : Texture, posx, posy : int | float | float32, tint : Color) = ## Draws texture from center
     tex.DrawTexture(int posx + tex.width / 2, int posy + tex.height / 2, tint)
 
-func reflect*(i, tp : int | float) : int | float =
+func reflect*(i, tp : int | float) : int | float = ## Flips value over tp
     return tp - i + tp
 
 func abs*(v : Vector2) : Vector2 =
@@ -91,7 +91,7 @@ func `-`*[T](v : Vector2, n : T) : Vector2 =
     result.x = v.x - n
     result.y = v.y - n
 
-func `+=`*[T](v : var Vector2, t : T) =
+func `+=`*[T](v : var Vector2, t : T) = 
     v = v + t
 
 func `/`*(v, v2 : Vector2) : Vector2 =
@@ -116,51 +116,48 @@ func `*`*(v, v2 : Vector2) : Vector2 =
 func `*`*(v : Vector2, i : int | float | float32) : Vector2 =
     return makevec2(v.x * float32 i, v.y * float32 i)
 
-func `<|`*(v : Vector2, n : float32 | int | float) : bool =
+func `<|`*(v : Vector2, n : float32 | int | float) : bool = ## True if either x or y < x2 or y2
     return v.x < n or v.y < n
 
-func `<&`*(v : Vector2, n : float32 | int | float) : bool =
+func `<&`*(v : Vector2, n : float32 | int | float) : bool = ## True if both x and y < x2 and y2
     return v.x < n and v.y < n
 
-func cart2Polar*(v : Vector2, c = Vector2(x : 0, y : 0)) : Vector2 =
+func cart2Polar*(v : Vector2, c = Vector2(x : 0, y : 0)) : Vector2 = ## Untested
     let v = v - c
     result.x = sqrt((v.x ^ 2) + (v.y ^ 2)) 
     result.y = arctan(v.y / v.x)
 
-func invert*(v : Vector2) : Vector2 = 
+func invert*(v : Vector2) : Vector2 = ## switches x and y
     return makevec2(v.y, v.x)
 
-func dist*(v, v2 : Vector2) : float = 
+func dist*(v, v2 : Vector2) : float = ## distance of 2 vecs (Untested)
     return abs sqrt(((v.x - v2.x) ^ 2) + ((v.y - v2.y) ^ 2))
 
-func dot*(v, v2 : Vector2) : float =
+func dot*(v, v2 : Vector2) : float = ## Dot product of 2 vecs
     return (v.x * v2.x) + (v.y * v2.y)
 
-func dot*(x, y : int) : float =
+func dot*(x, y : int | float) : float = ## Dot of x and y as single vec
     return float (x * x) + (y * y)
 
-func dot*(x, y : float | float32) : float =
-    return (x * x) + (y * y)
-
-func dot*(v : Vector2) : float =
+func dot*(v : Vector2) : float = ## Dot of vec, vec
     return float (v.x * v.x) + (v.y * v.y)
 
-func makevec3*(i, j, k : float) : Vector3 =
+func makevec3*(i, j, k : float) : Vector3 = ## Easy vec3 constructor
     return Vector3(x : i, y : j, z : k)
 
-func makecolor*[T](f, d, l, o : T) : Color =
+func makecolor*[T](f, d, l, o : T) : Color = ## Easy color constructor
     return Color(r : uint8 f, g : uint8 d, b : uint8 l, a : uint8 o)
 
-func normalizeToScreen*(v, screenvec : Vector2) : Vector2 =
+func normalizeToScreen*(v, screenvec : Vector2) : Vector2 = ## Normalize vec2 over screencoord
     return makevec2(v.x / screenvec.x, v.y / screenvec.y )
 
-proc hash*(v : Vector2) : Hash =
+proc hash*(v : Vector2) : Hash = ## Hash for vec2
     var h : Hash = 0
     h = h !& hash v.x
     h = h !& hash v.y
     result = !$h
 
-proc drawTriangleFan*(verts : openArray[Vector2], color : Color) =
+proc drawTriangleFan*(verts : openArray[Vector2], color : Color) = ## Probably inefficient polygon renderer
     var inpoint : Vector2
     var mutverts : seq[Vector2]
 
@@ -182,5 +179,5 @@ proc drawTriangleFan*(verts : openArray[Vector2], color : Color) =
                     swap(points[k], points[k + 1])
         DrawTriangle(points[0], points[1], points[2], color)
 
-func normalize*(v : Vector2) : Vector2 =
+func normalize*(v : Vector2) : Vector2 = ## Normalize Vector
     return v / sqrt(v.x ^ 2 + v.y ^ 2)
