@@ -376,6 +376,8 @@ let
     tileTexTable = toTable {GRND : LoadTexture "assets/sprites/BaseTile.png", GOAL : LoadTexture "assets/sprites/LvlEndPortal.png", WALL : LoadTexture "assets/sprites/WallTile.png"}
     trailTex = LoadTexture "assets/sprites/WalkedTile.png"
     enemyTexArray = [LoadTexture "assets/sprites/Enemy1.png", LoadTexture "assets/sprites/Enemy2.png"]
+    moveOgg = LoadSound "assets/sounds/Move.ogg"
+    loseOgg = LoadSound "assets/sounds/GenericNotify.ogg"
 
 var
     plr = Player(canMove : true)
@@ -488,6 +490,7 @@ while not WindowShouldClose():
     # Move and Animate Player and Enemies
     if plr.canMove:
         if movePlayer(plr, lastframekey, numTilesVec, map):
+            PlaySound moveOgg
             moveEnemT1 enemies, plr, map 
             moveEnemT2 enemies, plr, map 
     for i in 0..<enemies.len:
