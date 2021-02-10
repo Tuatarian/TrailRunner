@@ -157,7 +157,7 @@ proc hash*(v : Vector2) : Hash = ## Hash for vec2
     h = h !& hash v.y
     result = !$h
 
-proc drawTriangleFan*(verts : openArray[Vector2], color : Color) = ## Probably inefficient polygon renderer
+proc drawTriangleFan*(verts : openArray[Vector2], color : Color) = ## Probably inefficient convex polygon renderer
     var inpoint : Vector2
     var mutverts : seq[Vector2]
 
