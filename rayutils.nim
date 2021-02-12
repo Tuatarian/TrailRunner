@@ -9,6 +9,10 @@ proc UnloadTexture*(texargs : varargs[Texture]) = ## runs UnloadTexture for each
     for tex in texargs:
         UnloadTexture tex
 
+proc UnloadSound*(soundargs : varargs[Sound]) = ## runs UnloadSound for each varargs
+    for snd in soundargs:
+        UnloadSound snd
+
 func toTuple*(v : Vector2) : (float32, float32) = ## Returns (x, y)
     return (v.x, v.y) 
 
