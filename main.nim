@@ -1,4 +1,4 @@
-import raylib, lenientops, rayutils, math, strformat, deques, sets, tables, random
+import raylib, lenientops, rayutils, math, strformat, deques, sets, tables, random, sugar, sequtils
 
 randomize()
 
@@ -276,17 +276,16 @@ proc findFromMap(map : seq[seq[Tile]]) : Vector2 =
             if map[i, j] == GOAL:
                 result = makevec2(j, i)
 
-proc findFromEmap(emap : seq[seq[Etile]]) : (Vector2, seq[Vector2], seq[int]) =
+proc findFromEmap(emap : seq[seq[Etile]]) : (seq[Vector2], seq[int]) =
     for i in 0..<emap.len:
         for j in 0..<emap[i].len:
             if emap[i, j] != NONE:
-                if emap[i, j] == PLRSPWN: result[0] = makevec2(j, i)
                 if emap[i, j] == EN1SPWN: 
-                    result[1].add makevec2(j, i)
-                    result[2].add 0
+                    result[0].add makevec2(j, i)
+                    result[1].add 0
                 if emap[i, j] == EN2SPWN:
-                    result[1].add makevec2(j, i)
-                    result[2].add 1
+                    result[0].add makevec2(j, i)
+                    result[1].add 1
 
     # -------------------------- #
     #       Map Generation       #
@@ -312,8 +311,10 @@ proc cellAutomaton(iters : int, wallaciousness : int) : seq[seq[Tile]] =
                         result[j, i] = WALL
                 elif result[j, i] == WALL:
                     result[j, i] = GRND
+                if (i, j) == (0, 0):
+                    result[j, i] = GRND
 
-proc genEmap(en1chance : int) : seq[seq[ETile]] =
+proc genEmap(en1chance : int, ) : seq[seq[ETile]] =
     result = genSeqSeq(8, 13, NONE)
     let numEnems = int gauss(5, 1)
     debugEcho numEnems
@@ -321,7 +322,7 @@ proc genEmap(en1chance : int) : seq[seq[ETile]] =
     for i in 0..<numEnems:
         let weight = rand(100)
         var pos = makevec2(rand 7, rand 12)
-        while pos in elocs:
+        while pos in elocs and pos != makevec2(0, 0):
             pos = makevec2(rand 7, rand 12)
         if i == 0:
             result[pos] = EN2SPWN
@@ -367,9 +368,12 @@ const
     screenHeight = 768
     screenWidth = 1248
     numTilesVec = makevec2(screenWidth div tilesize, screenHeight div tilesize)
+    vol = 1.5
 
 InitWindow screenWidth, screenHeight, "TrailRun"
-SetTargetFPS 75
+SetTargetFPS 60
+InitAudioDevice()
+SetMasterVolume vol
 
 let
     playerTex = LoadTexture "assets/sprites/Player.png"
@@ -377,7 +381,11 @@ let
     trailTex = LoadTexture "assets/sprites/WalkedTile.png"
     enemyTexArray = [LoadTexture "assets/sprites/Enemy1.png", LoadTexture "assets/sprites/Enemy2.png"]
     moveOgg = LoadSound "assets/sounds/Move.ogg"
-    loseOgg = LoadSound "assets/sounds/GenericNotify.ogg"
+    winOgg = LoadSound "assets/sounds/GenericNotify.ogg"
+    loseOgg = LoadSound "assets/sounds/Error.ogg"
+    genOgg = LoadSound "assets/sounds/Confirmation.ogg"
+
+genOgg.SetSoundVolume 1.5
 
 var
     plr = Player(canMove : true)
@@ -401,8 +409,12 @@ var
     timersToReset = @[deathTimer, genTimer]
     score : int
     interscore : int
+    musicArr = [LoadMusicStream "assets/sounds/music/NeonHighway.mp3"]
 
-(plr.pos, elocs, etypes) = findFromEmap emap
+for m in musicArr:
+    m.SetMusicVolume 1
+
+(elocs, etypes) = findFromEmap emap
 
 for i, loc in elocs.pairs:
     enemies.add(Enemy(pos : loc, npos : loc, typeId : etypes[i]))
@@ -411,8 +423,8 @@ for i, loc in elocs.pairs:
 proc initLevel(emap : var seq[seq[Etile]], enemies : var seq[Enemy], enemylocs : var seq[Vector2], etypes : var seq[int], plr : var Player, lvenloc : Vector2, timers : var seq[int]) =
     map = genMap(20, 30, makevec2(-1, -1))
     emap = genEmap(80)
-    (plr.pos, enemylocs, etypes) = findFromEmap emap
-    plr.npos = makevec2(0, 0); plr.canMove = true
+    (enemylocs, etypes) = findFromEmap emap
+    plr.pos = makevec2(0, 0); plr.npos = makevec2(0, 0); plr.canMove = true
     enemies = @[]
     for i, loc in enemylocs.pairs:
         enemies.add(Enemy(pos : loc, npos : loc, typeId : etypes[i]))
@@ -429,18 +441,26 @@ proc loadLevel(lvl : int, map : var seq[seq[Tile]], emap : var seq[seq[Etile]], 
     lvenloc = findFromMap map
 while not WindowShouldClose():
     ClearBackground RAYWHITE
+    var imp : bool
+    for m in musicArr:
+        if IsMusicPlaying m: imp = true
+    
+    if not imp:
+        echo "not imp"
+        echo rand(musicArr.len - 1)
+        PlayMusicStream(musicArr[rand(musicArr.len - 1)])
 
     if plr.npos notin plrPosSeq:
         plrPosSeq.add plr.npos
     
     if not plr.canMove and plr.dead:
         if deathTimer == 5:
-            let rscore = sigmoid(rcount, a = 2, k = -1, h = -1/10) * 500
-            score = int(score - rscore)
+            PlaySound loseOgg
+            score = interscore
             echo &"Run ended! Score : {score} | {currentlv}"
             currentlv = 0
             loadLevel currentlv, map, emap, enemies, elocs, etypes, plr, timersToReset, lvenloc
-            score = 0
+            (score, interscore) = (0, 0)
             deathTimer = 0
             rcount = 0
         deathTimer += 1
@@ -452,8 +472,10 @@ while not WindowShouldClose():
     if plr.won:
         deathTimer = 0
         plr.canMove = false
-        if winTimer == 10:
+        if winTimer == 7:
+            PlaySound winOgg
             score = interscore + 1000
+            interscore = score
             echo &"Wcore : {score}"
             plr.won = false
             currentlv += 1
@@ -474,9 +496,11 @@ while not WindowShouldClose():
     else: rcache2 = false
     
     if rcache:
-        if genTimer >= 5:
+        if not IsSoundPlaying genOgg:
+            PlaySound genOgg
+        if genTimer >= 3:
             rcount += 1
-            let rscore = int sigmoid(rcount, a = 2, k = -1, h = -0.25) * 500
+            let rscore = int sigmoid(rcount, a = 2, k = -1, h = -1/7) * 500
             interscore = int(score - rscore)
             echo &"Score : {interscore}"
             genTimer = 0
@@ -515,4 +539,6 @@ while not WindowShouldClose():
 for t in Tile:
     UnloadTexture tileTexTable[t]
 UnloadTexture playertex, trailTex
+CloseAudioDevice()
+UnloadSound loseOgg, moveOgg, winOgg, genOgg
 CloseWindow()
