@@ -1,4 +1,4 @@
-import raylib, lenientops, rayutils, math, strformat, deques, sets, tables, random, sugar, sequtils
+import raylib, lenientops, rayutils, math, strformat, deques, sets, tables, random, sequtils, strutils
 
 randomize()
 
@@ -9,9 +9,6 @@ type
         canMove : bool
         dead : bool
         won : bool
-        turnsLeftFrozen : int
-        kickingEnemies : bool
-        kickPower : int
     Enemy = object
         pos : Vector2
         npos : Vector2
@@ -19,7 +16,6 @@ type
         canMove : bool
         dead : bool
         won : bool
-        kicked : bool
         typeId : int
     Tile = enum
         GRND, WALL, GOAL
@@ -46,7 +42,6 @@ func playerAnim(plr : var Player) =
         plr.pos += dir / 2
     if abs(plr.pos - plr.npos) <& 0.1: 
         plr.pos = plr.npos
-
 
 proc movePlayer(plr : var Player, lfkey : var KeyboardKey, numtilesVec : Vector2, map : seq[seq[Tile]]) : bool =
     if IsKeyDown(KEY_A) or IsKeyDown(KEY_LEFT):
@@ -100,16 +95,16 @@ proc movePlayer(plr : var Player, lfkey : var KeyboardKey, numtilesVec : Vector2
 func getNeighborPos[T](map : seq[seq[T]], v : Vector2) : seq[Vector2] =
     let v = makevec2(v.y, v.x)
     if v.x < map.len - 1:
-        if map[v.x + 1, v.y] != WALL:
+        if map[v.x + 1, v.y] != WALL and map[v.x + 1, v.y] != GOAL:
             result.add makevec2(v.y, v.x + 1)
     if v.x > 0:
-        if map[v.x - 1, v.y] != WALL:
+        if map[v.x - 1, v.y] != WALL and map[v.x - 1, v.y] != GOAL:
             result.add makevec2(v.y, v.x - 1)
     if v.y < map[0].len - 1:
-        if map[v.x, v.y + 1] != WALL:
+        if map[v.x, v.y + 1] != WALL and map[v.x, v.y + 1] != GOAL:
             result.add makevec2(v.y + 1, v.x)
     if v.y > 0:
-        if map[v.x, v.y - 1] != WALL:
+        if map[v.x, v.y - 1] != WALL and map[v.x, v.y - 1] != GOAL:
             result.add makevec2(v.y - 1, v.x)
 
 func getNeighborTiles[T](map : seq[seq[T]], y, x : int) : seq[T] =
@@ -121,7 +116,6 @@ func getNeighborTiles[T](map : seq[seq[T]], y, x : int) : seq[T] =
         result.add map[y, x + 1]
     if x > 0:
         result.add map[y, x - 1]
-
 
 proc findPathBFS(start, target : Vector2, map : seq[seq[Tile]]) : seq[Vector2] =
     var fillEdge : Deque[Vector2]
@@ -135,7 +129,6 @@ proc findPathBFS(start, target : Vector2, map : seq[seq[Tile]]) : seq[Vector2] =
             if c notin traceTable:
                 traceTable[c] = curpos
                 fillEdge.addLast c
-    
 
     if fillEdge.len > 0:
         var antipath = @[target]
@@ -159,33 +152,28 @@ proc selectRandomDir[T](map : seq[seq[T]], start : Vector2) : Vector2 =
     var weight = rand(100)
     if weight < 25:
         var nposcache = start + makevec2(0, -1)
-        if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL:
+        if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL and map[invert nposcache] != GOAL:
             result = nposcache
         else: weight += 25
     if weight < 50:
         var nposcache = start + makevec2(0, 1)
-        if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL:
+        if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL and map[invert nposcache] != GOAL:
             result = nposcache
         else: weight += 25
     if weight < 75:
         var nposcache = start + makevec2(1, 0)
-        if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL:
+        if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL and map[invert nposcache] != GOAL:
             result = nposcache
         else: weight += 25
     if weight <= 100:
         var nposcache = start + makevec2(-1, 0)
-        if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL:
+        if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL and map[invert nposcache] != GOAL:
             result = nposcache
         else: result = start
 
 proc enemyAnim(enemies : var seq[Enemy]) =
     for i in 0..<enemies.len:
-        if enemies[i].kicked:
-            let dir = enemies[i].npos - enemies[i].pos
-            enemies[i].pos += dir / 2
-            if enemies[i].npos == enemies[i].pos:
-                enemies[i].kicked = false
-        elif enemies[i].npos != enemies[i].pos:
+        if enemies[i].npos != enemies[i].pos:
             let dir = enemies[i].npos - enemies[i].pos
             enemies[i].pos += dir / 2
         if abs(enemies[i].pos - enemies[i].npos) <& 0.1:
@@ -209,12 +197,12 @@ proc moveEnemT1(enemies : var seq[Enemy], plr : Player, map : seq[seq[Tile]]) =
                 else: enemies[i].npos = tarpath[1]
             elif weight < 96:
                 let nposcache = enemies[i].pos - invert dir
-                if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL:
+                if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL and map[invert nposcache] != GOAL:
                     enemies[i].npos = nposcache
                 else: weight += 5
             elif weight < 99:
                 let nposcache = enemies[i].pos + invert dir
-                if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL:
+                if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL and map[invert nposcache] != GOAL:
                     enemies[i].npos = nposcache
         else:
             enemies[i].npos = map.selectRandomDir(enemies[i].pos)
@@ -229,26 +217,9 @@ proc moveEnemT2(enemies : var seq[Enemy], plr : Player, map : seq[seq[Tile]]) =
                 if weight < 30:
                     enemies[i].npos = tarpath[1]
                 if weight < 46: 
-                    let nposcache = enemies[i].pos + makevec2(0, 1)
-                    if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL:
-                        enemies[i].npos = nposcache
-                    else: weight += 16
-                elif weight < 62:
-                    let nposcache = enemies[i].pos - makevec2(0, 1)
-                    if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL:
-                        enemies[i].npos = nposcache
-                    else: weight += 16
-                elif weight < 78:
-                    let nposcache = enemies[i].pos + makevec2(1, 0)
-                    if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL:
-                        enemies[i].npos = nposcache
-                    else: weight += 16
-                elif weight < 94:
-                    let nposcache = enemies[i].pos - makevec2(1, 0)
-                    if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL:
-                        enemies[i].npos = nposcache 
-            else:
-                enemies[i].npos = map.selectRandomDir(enemies[i].pos)
+                    enemies[i].npos = map.selectRandomDir(enemies[i].pos)
+                
+        enemies[i].npos = round enemies[i].npos
 
     # -------------------------- #
     #       Map Management       #
@@ -265,10 +236,32 @@ func parseEmapTile(c : char) : ETile =
     if c == '1': return EN1SPWN
     if c == '2': return EN2SPWN
 
-proc renderMap(map : seq[seq[Tile]], tileTexTable : Table[Tile, Texture], tilesize : int) =
+func getWallNeighbors*[T](map : seq[seq[T]], y, x : int) : string =
+    if y > 0:
+        if map[y - 1, x] == WALL: result &= 0
+        else: result &= 1
+    else: result &= 1
+    if x < map[0].len - 1:
+        if map[y, x + 1] == WALL: result &= 0
+        else: result &= 1
+    else: result &= 1
+    if y < map.len - 1:
+        if map[y + 1, x] == WALL: result &= 0
+        else: result &= 1
+    else: result &= 1
+    if x > 0:
+        if map[y, x - 1] == WALL: result &= 0
+        else: result &= 1
+    else: result &= 1
+
+proc renderMap(map : seq[seq[Tile]], tileTexTable : Table[Tile, Texture], wallTexTable : Table[string, Texture], tilesize : int) =
     for i in 0..<map.len:
         for j in 0..<map[i].len:
-            drawTexFromGrid(tileTexTable[map[i, j]], makevec2(j, i), tilesize)
+            var liveNeighborsBin = map.getWallNeighbors(i, j)
+            if map[i, j] != WALL:
+                drawTexFromGrid(tileTexTable[map[i, j]], makevec2(j, i), tilesize)
+            else:
+                drawTexFromGrid(wallTexTable[liveNeighborsBin], makevec2(j, i), tilesize)
 
 proc findFromMap(map : seq[seq[Tile]]) : Vector2 =
     for i in 0..<map.len:
@@ -311,13 +304,10 @@ proc cellAutomaton(iters : int, wallaciousness : int) : seq[seq[Tile]] =
                         result[j, i] = WALL
                 elif result[j, i] == WALL:
                     result[j, i] = GRND
-                if (i, j) == (0, 0):
-                    result[j, i] = GRND
 
-proc genEmap(en1chance : int, ) : seq[seq[ETile]] =
+proc genEmap(en1chance : int) : seq[seq[ETile]] =
     result = genSeqSeq(8, 13, NONE)
     let numEnems = int gauss(5, 1)
-    debugEcho numEnems
     var elocs : seq[Vector2]
     for i in 0..<numEnems:
         let weight = rand(100)
@@ -332,6 +322,7 @@ proc genEmap(en1chance : int, ) : seq[seq[ETile]] =
             result[pos] = EN1SPWN
         else:
             result[pos] = EN2SPWN
+    result[0, 0] = NONE
 
     # ----------------------- #
     #       Import Maps       #
@@ -342,6 +333,7 @@ proc genMap(iters, wallaciousness : int, goalLoc : Vector2) : seq[seq[Tile]] =
     if goalLoc.x == -1:
         result[rand(result.len - 1), rand(result[0].len - 1)] = GOAL
     else: result[invert goalLoc] = GOAL
+    result[0, 0] = GRND
 
 proc loadMap(lvl : int) : seq[seq[Tile]] =
     var lcount = 0
@@ -368,7 +360,7 @@ const
     screenHeight = 768
     screenWidth = 1248
     numTilesVec = makevec2(screenWidth div tilesize, screenHeight div tilesize)
-    vol = 1.5
+    vol = 0.75
 
 InitWindow screenWidth, screenHeight, "TrailRun"
 SetTargetFPS 60
@@ -377,7 +369,7 @@ SetMasterVolume vol
 
 let
     playerTex = LoadTexture "assets/sprites/Player.png"
-    tileTexTable = toTable {GRND : LoadTexture "assets/sprites/BaseTile.png", GOAL : LoadTexture "assets/sprites/LvlEndPortal.png", WALL : LoadTexture "assets/sprites/WallTile.png"}
+    tileTexTable = toTable {GRND : LoadTexture "assets/sprites/BaseTile.png", GOAL : LoadTexture "assets/sprites/LvlEndPortal.png"}
     trailTex = LoadTexture "assets/sprites/WalkedTile.png"
     enemyTexArray = [LoadTexture "assets/sprites/Enemy1.png", LoadTexture "assets/sprites/Enemy2.png"]
     moveOgg = LoadSound "assets/sounds/Move.ogg"
@@ -385,7 +377,10 @@ let
     loseOgg = LoadSound "assets/sounds/Error.ogg"
     genOgg = LoadSound "assets/sounds/Confirmation.ogg"
 
-genOgg.SetSoundVolume 1.5
+genOgg.SetSoundVolume 1.85
+moveOgg.SetSoundVolume 0.6
+
+
 
 var
     plr = Player(canMove : true)
@@ -400,6 +395,7 @@ var
     lvenloc = findFromMap map
     enemies : seq[Enemy]
     spacecache : bool
+    spacecache2 : bool
     altcache : bool
     genTimer : int
     rcache : bool
@@ -409,10 +405,23 @@ var
     timersToReset = @[deathTimer, genTimer]
     score : int
     interscore : int
-    musicArr = [LoadMusicStream "assets/sounds/music/NeonHighway.mp3"]
+    musicArr = [LoadMusicStream "assets/sounds/music/NeonHighway.mp3", LoadMusicStream "assets/sounds/music/SnowyStreets.mp3", LoadMusicStream "assets/sounds/music/CrystalClear.mp3", LoadMusicStream "assets/sounds/music/RhythmOfTime.mp3", LoadMusicStream "assets/sounds/music/Cavalier.mp3"]
+    lastSong = -1
+    wallTexTable : Table[string, Texture]
+    inMainMenu : bool
 
-for m in musicArr:
-    m.SetMusicVolume 1
+proc incTo4digits(i : int) : string =
+    result = $i
+    while result.len < 4:
+        result = $0 & result
+
+for i in 0..<16:
+    wallTexTable[incTo4digits int2bin i] = LoadTexture &"assets/sprites/walls/{incTo4digits int2bin i}.png"
+
+musicArr.iterIt(SetMusicVolume(it, 0.85))
+musicArr[2].SetMusicVolume 0.25
+musicArr[3].SetMusicVolume 3
+musicArr[4].SetMusicVolume 3
 
 (elocs, etypes) = findFromEmap emap
 
@@ -431,7 +440,6 @@ proc initLevel(emap : var seq[seq[Etile]], enemies : var seq[Enemy], enemylocs :
     for i in 0..<enemies.len:
         enemies[i].pos = enemylocs[i]
         enemies[i].npos = enemylocs[i]
-    plr.turnsLeftFrozen = 0
     plrPosSeq = @[]
     for i in 0..<timers.len: timers[i] = 0
 
@@ -439,106 +447,111 @@ proc initLevel(emap : var seq[seq[Etile]], enemies : var seq[Enemy], enemylocs :
 proc loadLevel(lvl : int, map : var seq[seq[Tile]], emap : var seq[seq[Etile]], enemies : var seq[Enemy], enemylocs : var seq[Vector2], enemtypes : var seq[int], plr : var Player, timers : var seq[int], lvenloc : var Vector2) =
     initLevel(emap, enemies, enemylocs, enemtypes, plr, lvenloc, timers)
     lvenloc = findFromMap map
+
+
 while not WindowShouldClose():
     ClearBackground RAYWHITE
-    var imp : bool
-    for m in musicArr:
-        if IsMusicPlaying m: imp = true
-    
-    if not imp:
-        echo "not imp"
-        echo rand(musicArr.len - 1)
-        PlayMusicStream(musicArr[rand(musicArr.len - 1)])
 
-    if plr.npos notin plrPosSeq:
-        plrPosSeq.add plr.npos
-    
-    if not plr.canMove and plr.dead:
-        if deathTimer == 5:
-            PlaySound loseOgg
-            score = interscore
-            echo &"Run ended! Score : {score} | {currentlv}"
-            currentlv = 0
-            loadLevel currentlv, map, emap, enemies, elocs, etypes, plr, timersToReset, lvenloc
-            (score, interscore) = (0, 0)
+    musicArr.iterIt(UpdateMusicStream(it))
+
+    let nimp = not musicArr.mapIt(it.IsMusicPlaying()).foldl(a or b)
+
+    if nimp or spacecache == true:
+        spacecache = false
+        musicArr.iterIt(it.StopMusicStream)
+        var inx = rand(musicArr.len - 1)
+        PlayMusicStream(musicArr[inx])
+    if inMainMenu:
+        discard
+    else:
+        if not plr.canMove and plr.dead:
+            if deathTimer == 5:
+                PlaySound loseOgg
+                currentlv = 0
+                loadLevel currentlv, map, emap, enemies, elocs, etypes, plr, timersToReset, lvenloc
+                (score, interscore) = (0, 0)
+                deathTimer = 0
+                rcount = 0
+            deathTimer += 1
+        
+        # Check if player has reached the end goal
+        if plr.npos == lvenloc:
+            plr.won = true
+
+        if plr.won:
             deathTimer = 0
-            rcount = 0
-        deathTimer += 1
-    
-    # Check if player has reached the end goal
-    if plr.npos == lvenloc:
-        plr.won = true
+            plr.canMove = false
+            if winTimer == 7:
+                PlaySound winOgg
+                score = interscore + 1000
+                interscore = score
+                plr.won = false
+                currentlv += 1
+                loadLevel currentlv, map, emap, enemies, elocs, etypes, plr, timersToReset, lvenloc
+                winTimer = 0
+                rcount = 0
+            else: winTimer += 1
+        
+        # Cache buttons pressed
+        if IsKeyDown(KEY_SPACE):
+            if not spacecache2:
+                (spacecache, spacecache2) = (true, true)
+        else: spacecache2 = false
+        if IsKeyDown(KEY_LEFT_ALT) or IsKeyDown(KEY_RIGHT_ALT):
+            altcache = true
+        if IsKeyDown(KEY_R):
+            if not rcache2:
+                rcache = true
+                rcache2 = true
+        else: rcache2 = false
+        
+        if rcache:
+            if not IsSoundPlaying genOgg:
+                PlaySound genOgg
+            if genTimer >= 3:
+                rcount += 1
+                let rscore = int sigmoid(rcount, a = 2, k = -1, h = -1/7) * 500
+                interscore = int(score - rscore)
+                echo &"Score : {interscore}"
+                genTimer = 0
+                map = genMap(25, 30, lvenloc)
+                rcache = false
+                plr.canMove = true
+            else: 
+                gentimer += 1
+                map = genMap(25, 30, lvenloc)
 
-    if plr.won:
-        deathTimer = 0
-        plr.canMove = false
-        if winTimer == 7:
-            PlaySound winOgg
-            score = interscore + 1000
-            interscore = score
-            echo &"Wcore : {score}"
-            plr.won = false
-            currentlv += 1
-            loadLevel currentlv, map, emap, enemies, elocs, etypes, plr, timersToReset, lvenloc
-            winTimer = 0
-            rcount = 0
-        else: winTimer += 1
-    
-    # Cache buttons pressed
-    if IsKeyDown(KEY_SPACE):
-        spacecache = true
-    if IsKeyDown(KEY_LEFT_ALT) or IsKeyDown(KEY_RIGHT_ALT):
-        altcache = true
-    if IsKeyDown(KEY_R):
-        if not rcache2:
-            rcache = true
-            rcache2 = true
-    else: rcache2 = false
-    
-    if rcache:
-        if not IsSoundPlaying genOgg:
-            PlaySound genOgg
-        if genTimer >= 3:
-            rcount += 1
-            let rscore = int sigmoid(rcount, a = 2, k = -1, h = -1/7) * 500
-            interscore = int(score - rscore)
-            echo &"Score : {interscore}"
-            genTimer = 0
-            map = genMap(25, 30, lvenloc)
-            rcache = false
-            plr.canMove = true
-        else: 
-            gentimer += 1
-            map = genMap(25, 30, lvenloc)
-
-    # Move and Animate Player and Enemies
-    if plr.canMove:
-        if movePlayer(plr, lastframekey, numTilesVec, map):
-            PlaySound moveOgg
-            moveEnemT1 enemies, plr, map 
-            moveEnemT2 enemies, plr, map 
-    for i in 0..<enemies.len:
-        if enemies[i].pos == plr.pos:
+        # Move and Animate Player and Enemies
+        if plr.canMove:
+            if movePlayer(plr, lastframekey, numTilesVec, map):
+                PlaySound moveOgg
+                moveEnemT1 enemies, plr, map 
+                moveEnemT2 enemies, plr, map 
+        if enemies.mapIt(it.pos == plr.pos).foldl(a or b):
             plr.canMove = false
             plr.dead = true
-    playerAnim plr
-    enemyAnim enemies
-
+        playerAnim plr
+        enemyAnim enemies
 
     # ---------------- #
     #       DRAW       #
     # ---------------- #
 
     BeginDrawing()
-    renderMap map, tileTexTable, tilesize
+    renderMap map, tileTexTable, wallTexTable, tilesize
     # renderTrail plrPosSeq, trailTex, tilesize
     drawTexCenteredFromGrid playerTex, plr.pos, tilesize, WHITE
     renderEnemies enemies, enemyTexArray, tilesize
+    DrawText $interscore, screenWidth - 118, 42, 40, RED
+    DrawText $interscore, screenWidth - 120, 40, 40, RAYWHITE
     EndDrawing()
 
-for t in Tile:
-    UnloadTexture tileTexTable[t]
+for t in tileTexTable.values:
+    UnloadTexture t
+for t in wallTexTable.values:
+    UnloadTexture t
 UnloadTexture playertex, trailTex
+UnloadMusicStream musicArr
 CloseAudioDevice()
 UnloadSound loseOgg, moveOgg, winOgg, genOgg
 CloseWindow()
