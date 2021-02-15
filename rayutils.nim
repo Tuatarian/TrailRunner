@@ -1,17 +1,32 @@
-import raylib, math, hashes, sugar
+import raylib, math, hashes, sugar, macros, strutils
 
 func sigmoid*(x : int | float, a : int | float = 1, b : int | float = E, h : int | float = 0, k : int | float = 0) : float = ## Sigmoid in the form a(1/1 + e^(hx)) + k
     return a * 1/(1 + pow(E, h * x)) + k
 
+macro iterIt*[T](s : openArray[T], op : untyped) : untyped =
+    result = newStmtList()
+    result.add(newTree(nnkForStmt, newIdentNode("it"), newIdentNode($s), newStmtList(op)))
+
 const colorArr* : array[25, Color] = [LIGHTGRAY, GRAY, DARKGRAY, YELLOW, GOLD, ORANGE, PINK, RED, MAROON, GREEN, LIME, DARKGREEN, SKYBLUE, BLUE, DARKBLUE, PURPLE, VIOLET, DARKPURPLE, BEIGE, BROWN, DARKBROWN, WHITE, BLACK, MAGENTA, RAYWHITE] ## Array of all rl colours
 
+proc int2bin*(i : int) : int =
+    var i = i
+    var rem = 1
+    var tmp = 1
+    while i != 0:
+        rem = i mod 2
+        i = i div 2
+        result = result + rem * tmp
+        tmp = tmp * 10
+
 proc UnloadTexture*(texargs : varargs[Texture]) = ## runs UnloadTexture for each vararg
-    for tex in texargs:
-        UnloadTexture tex
+    texargs.iterIt(UnloadTexture it)
+
+proc UnloadMusicStream*(musargs : varargs[Music]) = ## runs UnloadMusicStream on each vararg
+    musargs.iterIt(UnloadMusicStream it)
 
 proc UnloadSound*(soundargs : varargs[Sound]) = ## runs UnloadSound for each varargs
-    for snd in soundargs:
-        UnloadSound snd
+    soundargs.iterIt(UnloadSound it)
 
 func toTuple*(v : Vector2) : (float32, float32) = ## Returns (x, y)
     return (v.x, v.y) 
@@ -54,6 +69,9 @@ func genSeqSeq*[T](y, x : int, val : T) : seq[seq[T]] = ## return a seq[seq[T]] 
         result.add @[]
         for j in 0..<x:
             result[i].add(val)
+
+func `&=`*[T](s : var string, z : T) = 
+    s = s & $z
 
 func apply*(v : Vector2, op : (float32) -> float32) : Vector2 = ## runs proc on x and y
     return makevec2(op v.x, op v.y)
