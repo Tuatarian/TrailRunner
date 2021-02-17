@@ -1,5 +1,7 @@
 import raylib, lenientops, rayutils, math, strformat, deques, sets, tables, random, sequtils, strutils
 
+template BGREY() : auto = makecolor("282828", 255)
+
 randomize()
 
 type
@@ -408,15 +410,11 @@ var
     musicArr = [LoadMusicStream "assets/sounds/music/NeonHighway.mp3", LoadMusicStream "assets/sounds/music/SnowyStreets.mp3", LoadMusicStream "assets/sounds/music/CrystalClear.mp3", LoadMusicStream "assets/sounds/music/RhythmOfTime.mp3", LoadMusicStream "assets/sounds/music/Cavalier.mp3"]
     lastSong = -1
     wallTexTable : Table[string, Texture]
-    inMainMenu : bool
-
-proc incTo4digits(i : int) : string =
-    result = $i
-    while result.len < 4:
-        result = $0 & result
+    screenId = 0
+    buttonColors = [RAYWHITE, RAYWHITE, RAYWHITE]
 
 for i in 0..<16:
-    wallTexTable[incTo4digits int2bin i] = LoadTexture &"assets/sprites/walls/{incTo4digits int2bin i}.png"
+    wallTexTable[toBin(i, 4)] = LoadTexture &"assets/sprites/walls/{toBin(i, 4)}.png"
 
 musicArr.iterIt(SetMusicVolume(it, 0.85))
 musicArr[2].SetMusicVolume 0.25
@@ -450,7 +448,7 @@ proc loadLevel(lvl : int, map : var seq[seq[Tile]], emap : var seq[seq[Etile]], 
 
 
 while not WindowShouldClose():
-    ClearBackground RAYWHITE
+    ClearBackground BGREY
 
     musicArr.iterIt(UpdateMusicStream(it))
 
@@ -461,9 +459,31 @@ while not WindowShouldClose():
         musicArr.iterIt(it.StopMusicStream)
         var inx = rand(musicArr.len - 1)
         PlayMusicStream(musicArr[inx])
-    if inMainMenu:
-        discard
-    else:
+
+    if screenId == 0:
+        if GetMousePosition() in makerect(makevec2(52, 313), makevec2(379, 313), makevec2(379, 451), makevec2(52, 451)):
+            if IsMouseButtonReleased(MOUSE_LEFT_BUTTON): screenId = 0
+            buttonColors[0] = WHITE
+        else: buttonColors[0] = RAYWHITE
+        if GetMousePosition() in makerect(makevec2(424, 231), makevec2(828, 231), makevec2(828, 535), makevec2(424, 535)):
+            if IsMouseButtonReleased(MOUSE_LEFT_BUTTON):
+                screenId = 1
+            buttonColors[1] = WHITE
+        else: buttonColors[1] = RAYWHITE 
+        if GetMousePosition() in makerect(makevec2(863, 313), makevec2(1192, 313), makevec2(1192, 451), makevec2(863, 451)):
+            if IsMouseButtonReleased(MOUSE_LEFT_BUTTON): screenId = 2
+            buttonColors[2] = WHITE
+        else: buttonColors[2] = RAYWHITE
+
+        BeginDrawing()
+        drawTriangleFan makevec2(52, 313), makevec2(52, 451), makevec2(379, 451), makevec2(379, 313), buttonColors[0]
+        DrawText "Tutorial", 69, 352, 70, BGREY
+        drawTriangleFan makevec2(424, 231), makevec2(828, 231), makevec2(828, 535), makevec2(424, 535), buttonColors[1]
+        drawTriangleFan makevec2(554, 292), makevec2(692, 385), makevec2(554, 475), BGREY
+        drawTriangleFan makevec2(863, 313), makevec2(1192, 313), makevec2(1192, 451), makevec2(863, 451), buttonColors[2]
+        DrawText "Scores", 903, 352, 70, BGREY
+        EndDrawing()
+    elif screenId == 1:
         if not plr.canMove and plr.dead:
             if deathTimer == 5:
                 PlaySound loseOgg
@@ -533,18 +553,18 @@ while not WindowShouldClose():
         playerAnim plr
         enemyAnim enemies
 
-    # ---------------- #
-    #       DRAW       #
-    # ---------------- #
+        # ---------------- #
+        #       DRAW       #
+        # ---------------- #
 
-    BeginDrawing()
-    renderMap map, tileTexTable, wallTexTable, tilesize
-    # renderTrail plrPosSeq, trailTex, tilesize
-    drawTexCenteredFromGrid playerTex, plr.pos, tilesize, WHITE
-    renderEnemies enemies, enemyTexArray, tilesize
-    DrawText $interscore, screenWidth - 118, 42, 40, RED
-    DrawText $interscore, screenWidth - 120, 40, 40, RAYWHITE
-    EndDrawing()
+        BeginDrawing()
+        renderMap map, tileTexTable, wallTexTable, tilesize
+        # renderTrail plrPosSeq, trailTex, tilesize
+        drawTexCenteredFromGrid playerTex, plr.pos, tilesize, WHITE
+        renderEnemies enemies, enemyTexArray, tilesize
+        DrawText $interscore, screenWidth - 118, 42, 40, RED
+        DrawText $interscore, screenWidth - 120, 40, 40, RAYWHITE
+        EndDrawing()
 
 for t in tileTexTable.values:
     UnloadTexture t
