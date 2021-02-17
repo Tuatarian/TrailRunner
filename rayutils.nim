@@ -19,6 +19,18 @@ proc int2bin*(i : int) : int =
         result = result + rem * tmp
         tmp = tmp * 10
 
+func makerect*(v, v2, v3, v4 : Vector2) : Rectangle = ## Doesn't check that your points can form a rectangle
+    Rectangle(x : v.x, y : v.y, width : v2.x - v.x, height : v3.y - v2.y)
+
+func `in`*(v : Vector2, r : Rectangle) : bool =
+    return (v.x in r.x..r.x + r.width) and (v.y in r.y..r.y + r.height)
+
+func makecolor*[T](f, d, l, o : T) : Color = ## Easy color constructor
+    return Color(r : uint8 f, g : uint8 d, b : uint8 l, a : uint8 o)
+
+func makecolor*(s : string, alp : uint8) : Color =
+    return makecolor(fromHex[uint8]($s[0..1]), fromHex[uint8]($s[2..3]), fromHex[uint8]($s[4..5]), alp)
+
 proc UnloadTexture*(texargs : varargs[Texture]) = ## runs UnloadTexture for each vararg
     texargs.iterIt(UnloadTexture it)
 
@@ -167,9 +179,6 @@ func dot*(v : Vector2) : float = ## Dot of vec, vec
 func makevec3*(i, j, k : float) : Vector3 = ## Easy vec3 constructor
     return Vector3(x : i, y : j, z : k)
 
-func makecolor*[T](f, d, l, o : T) : Color = ## Easy color constructor
-    return Color(r : uint8 f, g : uint8 d, b : uint8 l, a : uint8 o)
-
 func normalizeToScreen*(v, screenvec : Vector2) : Vector2 = ## Normalize vec2 over screencoord
     return makevec2(v.x / screenvec.x, v.y / screenvec.y )
 
@@ -180,6 +189,28 @@ proc hash*(v : Vector2) : Hash = ## Hash for vec2
     result = !$h
 
 proc drawTriangleFan*(verts : openArray[Vector2], color : Color) = ## Probably inefficient convex polygon renderer
+    var inpoint : Vector2
+    var mutverts : seq[Vector2]
+
+    for v in verts: 
+        inpoint = inpoint + v
+        mutverts.add(v)
+    
+    inpoint = inpoint / float verts.len
+    mutverts.add(verts[0])
+
+    for i in 1..<mutverts.len:
+        var points = [inpoint, mutverts[i - 1], mutverts[i]]
+        var ininpoint = (points[0] + points[1] + points[2]) / 3
+        var polarpoints = [cart2Polar(points[0], ininpoint), cart2Polar(points[1], ininpoint), cart2Polar(points[2], ininpoint)]
+        for j in 0..points.len:
+            for k in 0..<points.len - 1 - j:
+                if polarpoints[k].y > polarpoints[k + 1].y:
+                    swap(polarpoints[k], polarpoints[k + 1])
+                    swap(points[k], points[k + 1])
+        DrawTriangle(points[0], points[1], points[2], color)
+
+proc drawTriangleFan*(verts : varargs[Vector2], color : Color) = ## Probably inefficient convex polygon renderer
     var inpoint : Vector2
     var mutverts : seq[Vector2]
 
