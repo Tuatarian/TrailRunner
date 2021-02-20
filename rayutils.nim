@@ -1,13 +1,80 @@
 import raylib, math, hashes, sugar, macros, strutils
 
+func makevec2*(x, y: float | float32 | int) : Vector2 =  ## Easy vec2 constructor
+    result.x = float x
+    result.y = float y
+
 func sigmoid*(x : int | float, a : int | float = 1, b : int | float = E, h : int | float = 0, k : int | float = 0) : float = ## Sigmoid in the form a(1/1 + e^(hx)) + k
     return a * 1/(1 + pow(E, h * x)) + k
 
-macro iterIt*[T](s : openArray[T], op : untyped) : untyped =
+macro iterIt*[T](s : openArray[T], op : untyped) : untyped = ## applies operation to it
     result = newStmtList()
     result.add(newTree(nnkForStmt, newIdentNode("it"), newIdentNode($s), newStmtList(op)))
 
 const colorArr* : array[25, Color] = [LIGHTGRAY, GRAY, DARKGRAY, YELLOW, GOLD, ORANGE, PINK, RED, MAROON, GREEN, LIME, DARKGREEN, SKYBLUE, BLUE, DARKBLUE, PURPLE, VIOLET, DARKPURPLE, BEIGE, BROWN, DARKBROWN, WHITE, BLACK, MAGENTA, RAYWHITE] ## Array of all rl colours
+
+func `+`*(v, v2 : Vector2) : Vector2 =
+    result.x = v.x + v2.x
+    result.y = v.y + v2.y
+
+func `-`*(v, v2 : Vector2) : Vector2 =
+    result.x = v.x - v2.x
+    result.y = v.y - v2.y
+
+func `+`*[T](v : Vector2, n : T) : Vector2 =
+    result.x = v.x + n
+    result.y = v.y + n
+
+func `-`*[T](v : Vector2, n : T) : Vector2 =
+    result.x = v.x - n
+    result.y = v.y - n
+
+func `+=`*[T](v : var Vector2, t : T) = 
+    v = v + t
+
+func `/`*(v, v2 : Vector2) : Vector2 =
+    result.x = v.x / v2.x
+    result.y = v.y / v2.y
+
+func `/`*(v, : Vector2, f : float) : Vector2 =
+    result.x = v.x / f
+    result.y = v.y / f
+
+func `/`*(v, : Vector2, i : int) : Vector2 =
+    result.x = v.x / float i
+    result.y = v.y / float i
+
+func `div`*(v, : Vector2, f : float) : Vector2 =
+    result.x = ceil(v.x / f)
+    result.y = ceil(v.y / f)
+
+func `div`*(v, : Vector2, i : int) : Vector2 =
+    result.x = float v.x.int div i
+    result.y = float v.y.int div i
+
+func `mod`*(v, v2 : Vector2) : Vector2 =
+    return makevec2(v.x mod v2.x, v.y mod v2.y)
+
+func `*`*(v, v2 : Vector2) : Vector2 =
+    result.x = v.x * v2.x
+    result.y = v.y * v2.y
+
+func `*`*(v : Vector2, i : int | float | float32) : Vector2 =
+    return makevec2(v.x * float32 i, v.y * float32 i)
+
+func `<|`*(v : Vector2, n : float32 | int | float) : bool = ## True if either x or y < x2 or y2
+    return v.x < n or v.y < n
+
+func `<&`*(v : Vector2, n : float32 | int | float) : bool = ## True if both x and y < x2 and y2
+    return v.x < n and v.y < n
+
+func drawTextCentered*(s : string, x, y, fsize : int, colour : Color) =
+    let tSizeVec = MeasureTextEx(GetFontDefault(), s, float fsize, max(10,fsize) / 20) div 2
+    DrawText s, x - tSizeVec.x.int, y - tSizeVec.y.int, fsize, colour
+
+func drawTextCenteredX*(s : string, x, y, fsize : int, colour : Color) =
+    let tSizeVec = MeasureTextEx(GetFontDefault(), s, float fsize, max(10,fsize) / 20) div 2
+    DrawText s, x - tSizeVec.x.int, y, fsize, colour
 
 proc int2bin*(i : int) : int =
     var i = i
@@ -22,8 +89,21 @@ proc int2bin*(i : int) : int =
 func makerect*(v, v2, v3, v4 : Vector2) : Rectangle = ## Doesn't check that your points can form a rectangle
     Rectangle(x : v.x, y : v.y, width : v2.x - v.x, height : v3.y - v2.y)
 
+func makerect*(x, y, w, h : int) : Rectangle =
+    Rectangle(x : float x, y : float y, width : float w, height : float h)
+
 func `in`*(v : Vector2, r : Rectangle) : bool =
     return (v.x in r.x..r.x + r.width) and (v.y in r.y..r.y + r.height)
+
+func sign(v, v2, v3 : Vector2) : float =
+    return (v.x - v3.x) * (v2.y - v3.y) - (v2.x - v3.x) * (v.y - v3.y)
+
+func `in`*(v, t1, t2, t3 : Vector2) : bool =
+    let d = sign(v, t1, t2)
+    let d2 = sign(v, t2, t3)
+    let d3 = sign(v, t3, t1)
+    return not ((d < 0) or (d2 < 0) or (d3 < 0)) and ((d > 0) or (d2 > 0) or (d3 > 0))
+    
 
 func makecolor*[T](f, d, l, o : T) : Color = ## Easy color constructor
     return Color(r : uint8 f, g : uint8 d, b : uint8 l, a : uint8 o)
@@ -42,10 +122,6 @@ proc UnloadSound*(soundargs : varargs[Sound]) = ## runs UnloadSound for each var
 
 func toTuple*(v : Vector2) : (float32, float32) = ## Returns (x, y)
     return (v.x, v.y) 
-
-func makevec2*(x, y: float | float32 | int) : Vector2 =  ## Easy vec2 constructor
-    result.x = float x
-    result.y = float y
 
 func clamp*(v, v2 : Vector2) : Vector2 = ## Returns min of x and min of y 
     return makevec2(min(v.x, v2.x), min(v.y, v2.y))
@@ -108,53 +184,6 @@ func reflect*(i, tp : int | float) : int | float = ## Flips value over tp
 
 func abs*(v : Vector2) : Vector2 =
     return makevec2(abs v.x, abs v.y)
-
-func `+`*(v, v2 : Vector2) : Vector2 =
-    result.x = v.x + v2.x
-    result.y = v.y + v2.y
-
-func `-`*(v, v2 : Vector2) : Vector2 =
-    result.x = v.x - v2.x
-    result.y = v.y - v2.y
-
-func `+`*[T](v : Vector2, n : T) : Vector2 =
-    result.x = v.x + n
-    result.y = v.y + n
-
-func `-`*[T](v : Vector2, n : T) : Vector2 =
-    result.x = v.x - n
-    result.y = v.y - n
-
-func `+=`*[T](v : var Vector2, t : T) = 
-    v = v + t
-
-func `/`*(v, v2 : Vector2) : Vector2 =
-    result.x = v.x / v2.x
-    result.y = v.y / v2.y
-
-func `/`*(v, : Vector2, f : float) : Vector2 =
-    result.x = v.x / f
-    result.y = v.y / f
-
-func `div`*(v, : Vector2, f : float) : Vector2 =
-    result.x = ceil(v.x / f)
-    result.y = ceil(v.y / f)
-
-func `mod`*(v, v2 : Vector2) : Vector2 =
-    return makevec2(v.x mod v2.x, v.y mod v2.y)
-
-func `*`*(v, v2 : Vector2) : Vector2 =
-    result.x = v.x * v2.x
-    result.y = v.y * v2.y
-
-func `*`*(v : Vector2, i : int | float | float32) : Vector2 =
-    return makevec2(v.x * float32 i, v.y * float32 i)
-
-func `<|`*(v : Vector2, n : float32 | int | float) : bool = ## True if either x or y < x2 or y2
-    return v.x < n or v.y < n
-
-func `<&`*(v : Vector2, n : float32 | int | float) : bool = ## True if both x and y < x2 and y2
-    return v.x < n and v.y < n
 
 func cart2Polar*(v : Vector2, c = Vector2(x : 0, y : 0)) : Vector2 = ## Untested
     let v = v - c
