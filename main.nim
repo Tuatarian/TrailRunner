@@ -483,6 +483,29 @@ while not WindowShouldClose():
         drawTriangleFan makevec2(863, 313), makevec2(1192, 313), makevec2(1192, 451), makevec2(863, 451), buttonColors[2]
         DrawText "Scores", 903, 352, 70, BGREY
         EndDrawing()
+    elif screenId == 2:
+        BeginDrawing()
+        drawTextCenteredX "High Scores", screenWidth div 2 + 3, 53, 80, RED
+        drawTextCenteredX "High Scores", screenWidth div 2, 50, 80, WHITE
+
+        drawTextCenteredX "1.", screenWidth div 14 + 3, 213, 60, RED
+        drawTextCenteredX "1.", screenWidth div 14, 210, 60, WHITE
+
+        drawTextCenteredX "2.", screenWidth div 14 + 3, 313, 60, RED
+        drawTextCenteredX "2.", screenWidth div 14, 310, 60, WHITE
+
+        drawTextCenteredX "3.", screenWidth div 14 + 3, 413, 60, RED
+        drawTextCenteredX "3.", screenWidth div 14, 410, 60, WHITE
+
+        drawTextCenteredX "4.", screenWidth div 14 + 3, 513, 60, RED
+        drawTextCenteredX "4.", screenWidth div 14, 510, 60, WHITE
+
+        drawTextCenteredX "5.", screenWidth div 14 + 3, 613, 60, RED
+        drawTextCenteredX "5.", screenWidth div 14, 610, 60, WHITE
+
+        drawTriangleFan(makevec2(56, 90), makevec2(143, 145), makevec2(143, 38), WHITE)
+
+        EndDrawing()
     elif screenId == 1:
         if not plr.canMove and plr.dead:
             if deathTimer == 5:
@@ -532,7 +555,6 @@ while not WindowShouldClose():
                 rcount += 1
                 let rscore = int sigmoid(rcount, a = 2, k = -1, h = -1/7) * 500
                 interscore = int(score - rscore)
-                echo &"Score : {interscore}"
                 genTimer = 0
                 map = genMap(25, 30, lvenloc)
                 rcache = false
