@@ -1,6 +1,7 @@
-import raylib, lenientops, rayutils, math, strformat, deques, sets, tables, random, sequtils, strutils
+import raylib, lenientops, rayutils, math, strformat, deques, sets, tables, random, sequtils, strutils, algorithm
 
 template BGREY() : auto = makecolor("282828", 255)
+template OFFWHITE() : auto = makecolor(235, 235, 235)
 
 randomize()
 
@@ -362,7 +363,7 @@ const
     screenHeight = 768
     screenWidth = 1248
     numTilesVec = makevec2(screenWidth div tilesize, screenHeight div tilesize)
-    vol = 0.75
+    vol = 0
 
 InitWindow screenWidth, screenHeight, "TrailRun"
 SetTargetFPS 60
@@ -400,8 +401,7 @@ var
     spacecache2 : bool
     altcache : bool
     genTimer : int
-    rcache : bool
-    rcache2 : bool
+    rcache, rcache2 : bool
     rcount : int
     etypes : seq[int]
     timersToReset = @[deathTimer, genTimer]
@@ -411,7 +411,9 @@ var
     lastSong = -1
     wallTexTable : Table[string, Texture]
     screenId = 0
-    buttonColors = [RAYWHITE, RAYWHITE, RAYWHITE]
+    buttonColors = [OFFWHITE, OFFWHITE, OFFWHITE, OFFWHITE]
+    hiscores : seq[int]
+    escache, escache2 : bool
 
 for i in 0..<16:
     wallTexTable[toBin(i, 4)] = LoadTexture &"assets/sprites/walls/{toBin(i, 4)}.png"
@@ -446,6 +448,8 @@ proc loadLevel(lvl : int, map : var seq[seq[Tile]], emap : var seq[seq[Etile]], 
     initLevel(emap, enemies, enemylocs, enemtypes, plr, lvenloc, timers)
     lvenloc = findFromMap map
 
+hiscores = readFile("hiscores.txt").splitLines().toSeq.mapIt(parseInt it).sorted(Descending)
+SetExitKey KEY_PAUSE
 
 while not WindowShouldClose():
     ClearBackground BGREY
@@ -464,16 +468,16 @@ while not WindowShouldClose():
         if GetMousePosition() in makerect(makevec2(52, 313), makevec2(379, 313), makevec2(379, 451), makevec2(52, 451)):
             if IsMouseButtonReleased(MOUSE_LEFT_BUTTON): screenId = 0
             buttonColors[0] = WHITE
-        else: buttonColors[0] = RAYWHITE
+        else: buttonColors[0] = OFFWHITE
         if GetMousePosition() in makerect(makevec2(424, 231), makevec2(828, 231), makevec2(828, 535), makevec2(424, 535)):
             if IsMouseButtonReleased(MOUSE_LEFT_BUTTON):
                 screenId = 1
             buttonColors[1] = WHITE
-        else: buttonColors[1] = RAYWHITE 
+        else: buttonColors[1] = OFFWHITE 
         if GetMousePosition() in makerect(makevec2(863, 313), makevec2(1192, 313), makevec2(1192, 451), makevec2(863, 451)):
             if IsMouseButtonReleased(MOUSE_LEFT_BUTTON): screenId = 2
             buttonColors[2] = WHITE
-        else: buttonColors[2] = RAYWHITE
+        else: buttonColors[2] = OFFWHITE
 
         BeginDrawing()
         drawTriangleFan makevec2(52, 313), makevec2(52, 451), makevec2(379, 451), makevec2(379, 313), buttonColors[0]
@@ -484,26 +488,42 @@ while not WindowShouldClose():
         DrawText "Scores", 903, 352, 70, BGREY
         EndDrawing()
     elif screenId == 2:
+        if GetMousePosition().in(makevec2(143, 145), makevec2(56, 90), makevec2(143, 38)):
+            if IsMouseButtonReleased(MOUSE_LEFT_BUTTON): screenId = 0
+            buttonColors[3] = WHITE
+        else: buttonColors[3] = OFFWHITE
+        if escache: screenId = 0; escache = false
+
         BeginDrawing()
         drawTextCenteredX "High Scores", screenWidth div 2 + 3, 53, 80, RED
         drawTextCenteredX "High Scores", screenWidth div 2, 50, 80, WHITE
 
         drawTextCenteredX "1.", screenWidth div 14 + 3, 213, 60, RED
         drawTextCenteredX "1.", screenWidth div 14, 210, 60, WHITE
+        drawTextCenteredX $hiscores[0], screenWidth div 2 + 3, 213, 60, RED
+        drawTextCenteredX $hiscores[0], screenWidth div 2, 210, 60, WHITE
 
         drawTextCenteredX "2.", screenWidth div 14 + 3, 313, 60, RED
         drawTextCenteredX "2.", screenWidth div 14, 310, 60, WHITE
+        drawTextCenteredX $hiscores[1], screenWidth div 2 + 3, 313, 60, RED
+        drawTextCenteredX $hiscores[1], screenWidth div 2, 310, 60, WHITE
 
         drawTextCenteredX "3.", screenWidth div 14 + 3, 413, 60, RED
         drawTextCenteredX "3.", screenWidth div 14, 410, 60, WHITE
+        drawTextCenteredX $hiscores[2], screenWidth div 2 + 3, 413, 60, RED
+        drawTextCenteredX $hiscores[2], screenWidth div 2, 410, 60, WHITE
 
         drawTextCenteredX "4.", screenWidth div 14 + 3, 513, 60, RED
         drawTextCenteredX "4.", screenWidth div 14, 510, 60, WHITE
+        drawTextCenteredX $hiscores[3], screenWidth div 2 + 3, 513, 60, RED
+        drawTextCenteredX $hiscores[3], screenWidth div 2, 510, 60, WHITE
 
         drawTextCenteredX "5.", screenWidth div 14 + 3, 613, 60, RED
         drawTextCenteredX "5.", screenWidth div 14, 610, 60, WHITE
+        drawTextCenteredX $hiscores[4], screenWidth div 2 + 3, 613, 60, RED
+        drawTextCenteredX $hiscores[4], screenWidth div 2, 610, 60, WHITE
 
-        drawTriangleFan(makevec2(56, 90), makevec2(143, 145), makevec2(143, 38), WHITE)
+        drawTriangleFan(makevec2(56, 90), makevec2(143, 145), makevec2(143, 38), buttonColors[3])
 
         EndDrawing()
     elif screenId == 1:
@@ -511,12 +531,14 @@ while not WindowShouldClose():
             if deathTimer == 5:
                 PlaySound loseOgg
                 currentlv = 0
+                if score > hiscores[4]:
+                    hiscores[4] = score; hiscores = hiscores.sorted(Descending)
                 loadLevel currentlv, map, emap, enemies, elocs, etypes, plr, timersToReset, lvenloc
                 (score, interscore) = (0, 0)
                 deathTimer = 0
                 rcount = 0
             deathTimer += 1
-        
+
         # Check if player has reached the end goal
         if plr.npos == lvenloc:
             plr.won = true
@@ -536,12 +558,6 @@ while not WindowShouldClose():
             else: winTimer += 1
         
         # Cache buttons pressed
-        if IsKeyDown(KEY_SPACE):
-            if not spacecache2:
-                (spacecache, spacecache2) = (true, true)
-        else: spacecache2 = false
-        if IsKeyDown(KEY_LEFT_ALT) or IsKeyDown(KEY_RIGHT_ALT):
-            altcache = true
         if IsKeyDown(KEY_R):
             if not rcache2:
                 rcache = true
@@ -585,8 +601,23 @@ while not WindowShouldClose():
         drawTexCenteredFromGrid playerTex, plr.pos, tilesize, WHITE
         renderEnemies enemies, enemyTexArray, tilesize
         DrawText $interscore, screenWidth - 118, 42, 40, RED
-        DrawText $interscore, screenWidth - 120, 40, 40, RAYWHITE
+        DrawText $interscore, screenWidth - 120, 40, 40, WHITE
         EndDrawing()
+
+        if escache:
+            currentlv = 0
+            if score > hiscores[4]:
+                hiscores[4] = score; hiscores = hiscores.sorted(Descending)
+            loadLevel currentlv, map, emap, enemies, elocs, etypes, plr, timersToReset, lvenloc
+            (score, interscore) = (0, 0)
+            deathTimer = 0
+            rcount = 0
+            escache = false
+            screenId = 0
+    if IsKeyDown(KEY_ESCAPE):
+        if not escache2:
+            (escache, escache2) = (true, true)
+    else: escache2= false
 
 for t in tileTexTable.values:
     UnloadTexture t
