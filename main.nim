@@ -363,7 +363,7 @@ const
     screenHeight = 768
     screenWidth = 1248
     numTilesVec = makevec2(screenWidth div tilesize, screenHeight div tilesize)
-    vol = 0
+    vol = 0.75
 
 InitWindow screenWidth, screenHeight, "TrailRun"
 SetTargetFPS 60
@@ -407,7 +407,7 @@ var
     timersToReset = @[deathTimer, genTimer]
     score : int
     interscore : int
-    musicArr = [LoadMusicStream "assets/sounds/music/NeonHighway.mp3", LoadMusicStream "assets/sounds/music/SnowyStreets.mp3", LoadMusicStream "assets/sounds/music/CrystalClear.mp3", LoadMusicStream "assets/sounds/music/RhythmOfTime.mp3", LoadMusicStream "assets/sounds/music/Cavalier.mp3"]
+    musicArr = [LoadMusicStream "assets/sounds/music/NeonHighway.mp3", LoadMusicStream "assets/sounds/music/SnowyStreets.mp3", LoadMusicStream "assets/sounds/music/CrystalClear.mp3", LoadMusicStream "assets/sounds/music/RhythmOfTime.mp3", LoadMusicStream "assets/sounds/music/Cavalier.mp3", LoadMusicStream "assets/sounds/music/Athena.mp3", LoadMusicStream "assets/sounds/music/Nimbus.mp3", LoadMusicStream "assets/sounds/music/No Strings Attached.mp3", LoadMusicStream "assets/sounds/music/Kanundrum.mp3"]
     lastSong = -1
     wallTexTable : Table[string, Texture]
     screenId = 0
@@ -422,6 +422,8 @@ musicArr.iterIt(SetMusicVolume(it, 0.85))
 musicArr[2].SetMusicVolume 0.25
 musicArr[3].SetMusicVolume 3
 musicArr[4].SetMusicVolume 3
+musicArr[6].SetMusicVolume 0.8
+musicArr[7].SetMusicVolume 0.85
 
 (elocs, etypes) = findFromEmap emap
 
@@ -449,7 +451,7 @@ proc loadLevel(lvl : int, map : var seq[seq[Tile]], emap : var seq[seq[Etile]], 
     lvenloc = findFromMap map
 
 hiscores = readFile("hiscores.txt").splitLines().toSeq.mapIt(parseInt it).sorted(Descending)
-SetExitKey KEY_PAUSE
+SetExitKey KEY_PAGE_UP
 
 while not WindowShouldClose():
     ClearBackground BGREY
@@ -458,10 +460,16 @@ while not WindowShouldClose():
 
     let nimp = not musicArr.mapIt(it.IsMusicPlaying()).foldl(a or b)
 
+    if IsKeyDown(KEY_SPACE):
+        if not spacecache2:
+            (spacecache, spacecache2) = (true, true)
+    else: spacecache2 = false
+
     if nimp or spacecache == true:
         spacecache = false
         musicArr.iterIt(it.StopMusicStream)
-        var inx = rand(musicArr.len - 1)
+        let inx = rand(musicArr.len - 1)
+        echo inx
         PlayMusicStream(musicArr[inx])
 
     if screenId == 0:
@@ -487,6 +495,9 @@ while not WindowShouldClose():
         drawTriangleFan makevec2(863, 313), makevec2(1192, 313), makevec2(1192, 451), makevec2(863, 451), buttonColors[2]
         DrawText "Scores", 903, 352, 70, BGREY
         EndDrawing()
+
+        if escache:
+            escache = false
     elif screenId == 2:
         if GetMousePosition().in(makevec2(143, 145), makevec2(56, 90), makevec2(143, 38)):
             if IsMouseButtonReleased(MOUSE_LEFT_BUTTON): screenId = 0
@@ -523,7 +534,7 @@ while not WindowShouldClose():
         drawTextCenteredX $hiscores[4], screenWidth div 2 + 3, 613, 60, RED
         drawTextCenteredX $hiscores[4], screenWidth div 2, 610, 60, WHITE
 
-        drawTriangleFan(makevec2(56, 90), makevec2(143, 145), makevec2(143, 38), buttonColors[3])
+        drawTriangleFan(makevec2(56, 90), makevec2(145, 145), makevec2(145, 38), buttonColors[3])
 
         EndDrawing()
     elif screenId == 1:
@@ -533,6 +544,7 @@ while not WindowShouldClose():
                 currentlv = 0
                 if score > hiscores[4]:
                     hiscores[4] = score; hiscores = hiscores.sorted(Descending)
+                    writeFile("hiscores.txt", hiscores.mapIt($it).foldl(&"{$a}\n{$b}"))
                 loadLevel currentlv, map, emap, enemies, elocs, etypes, plr, timersToReset, lvenloc
                 (score, interscore) = (0, 0)
                 deathTimer = 0
