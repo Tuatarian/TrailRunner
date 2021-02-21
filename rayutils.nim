@@ -105,10 +105,10 @@ func `in`*(v, t1, t2, t3 : Vector2) : bool =
     return not ((d < 0) or (d2 < 0) or (d3 < 0)) and ((d > 0) or (d2 > 0) or (d3 > 0))
     
 
-func makecolor*[T](f, d, l, o : T) : Color = ## Easy color constructor
+func makecolor*(f, d, l : int | float | uint8, o : uint8 = 255) : Color = ## Easy color constructor
     return Color(r : uint8 f, g : uint8 d, b : uint8 l, a : uint8 o)
 
-func makecolor*(s : string, alp : uint8) : Color =
+func makecolor*(s : string, alp : uint8 = 255) : Color =
     return makecolor(fromHex[uint8]($s[0..1]), fromHex[uint8]($s[2..3]), fromHex[uint8]($s[4..5]), alp)
 
 proc UnloadTexture*(texargs : varargs[Texture]) = ## runs UnloadTexture for each vararg
