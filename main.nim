@@ -379,6 +379,7 @@ let
     winOgg = LoadSound "assets/sounds/GenericNotify.ogg"
     loseOgg = LoadSound "assets/sounds/Error.ogg"
     genOgg = LoadSound "assets/sounds/Confirmation.ogg"
+    cogTex = LoadTexture "assets/sprites/settingsicon.png"
 
 genOgg.SetSoundVolume 1.85
 moveOgg.SetSoundVolume 0.6
@@ -411,9 +412,10 @@ var
     lastSong = -1
     wallTexTable : Table[string, Texture]
     screenId = 0
-    buttonColors = [OFFWHITE, OFFWHITE, OFFWHITE, OFFWHITE]
+    buttonColors = [OFFWHITE, OFFWHITE, OFFWHITE, OFFWHITE, OFFWHITE]
     hiscores : seq[int]
     escache, escache2 : bool
+    tutstage : int
 
 for i in 0..<16:
     wallTexTable[toBin(i, 4)] = LoadTexture &"assets/sprites/walls/{toBin(i, 4)}.png"
@@ -422,8 +424,8 @@ musicArr.iterIt(SetMusicVolume(it, 0.85))
 musicArr[2].SetMusicVolume 0.25
 musicArr[3].SetMusicVolume 3
 musicArr[4].SetMusicVolume 3
-musicArr[6].SetMusicVolume 0.8
-musicArr[7].SetMusicVolume 0.85
+musicArr[6].SetMusicVolume 0.75
+musicArr[7].SetMusicVolume 0.75
 
 (elocs, etypes) = findFromEmap emap
 
@@ -474,7 +476,7 @@ while not WindowShouldClose():
 
     if screenId == 0:
         if GetMousePosition() in makerect(makevec2(52, 313), makevec2(379, 313), makevec2(379, 451), makevec2(52, 451)):
-            if IsMouseButtonReleased(MOUSE_LEFT_BUTTON): screenId = 0
+            if IsMouseButtonReleased(MOUSE_LEFT_BUTTON): screenId = 3
             buttonColors[0] = WHITE
         else: buttonColors[0] = OFFWHITE
         if GetMousePosition() in makerect(makevec2(424, 231), makevec2(828, 231), makevec2(828, 535), makevec2(424, 535)):
@@ -486,6 +488,11 @@ while not WindowShouldClose():
             if IsMouseButtonReleased(MOUSE_LEFT_BUTTON): screenId = 2
             buttonColors[2] = WHITE
         else: buttonColors[2] = OFFWHITE
+        # if GetMousePosition() in makerect(1104, 17, 128, 128):
+        #     if IsMouseButtonReleased(MOUSE_LEFT_BUTTON):
+        #         screenId = 3
+        #     buttonColors[4] = WHITE
+        # else: buttonColors[4] = OFFWHITE
 
         BeginDrawing()
         drawTriangleFan makevec2(52, 313), makevec2(52, 451), makevec2(379, 451), makevec2(379, 313), buttonColors[0]
@@ -494,10 +501,58 @@ while not WindowShouldClose():
         drawTriangleFan makevec2(554, 292), makevec2(692, 385), makevec2(554, 475), BGREY
         drawTriangleFan makevec2(863, 313), makevec2(1192, 313), makevec2(1192, 451), makevec2(863, 451), buttonColors[2]
         DrawText "Scores", 903, 352, 70, BGREY
+        # DrawTexture cogTex, 1104, 17, buttonColors[4]
         EndDrawing()
 
         if escache:
             escache = false
+    elif screenId == 3:
+        if tutstage == 0:
+            emap = genSeqSeq(8, 13, NONE)
+            map = genSeqSeq(8, 13, GRND)
+            map[invert lvenloc] = GOAL
+        if tutstage == 1:
+            map = loadMap 1
+            lvenloc = findFromMap map
+        # Check if player has reached the end goal
+        if plr.npos == lvenloc:
+            plr.won = true
+
+        if plr.won:
+            deathTimer = 0
+            plr.canMove = false
+            if winTimer == 7:
+                PlaySound winOgg
+                plr.pos = makevec2(0, 0)
+                plr.npos = makevec2(0, 0)
+                plr.canMove = true
+                plr.won = false
+                tutstage += 1
+                winTimer = 0
+            else: winTimer += 1
+
+        # Move and Animate Player and Enemies
+        if plr.canMove:
+            if movePlayer(plr, lastframekey, numTilesVec, map):
+                PlaySound moveOgg
+                moveEnemT1 enemies, plr, map 
+                moveEnemT2 enemies, plr, map 
+        playerAnim plr
+
+        if escache:
+            screenId = 0
+            currentlv = 0
+            loadLevel currentlv, map, emap, enemies, elocs, etypes, plr, timersToReset, lvenloc
+            (score, interscore) = (0, 0)
+            deathTimer = 0
+            rcount = 0
+
+        BeginDrawing()
+        renderMap map, tileTexTable, wallTexTable, tilesize
+        # renderTrail plrPosSeq, trailTex, tilesize
+        drawTexCenteredFromGrid playerTex, plr.pos, tilesize, WHITE
+        # renderEnemies enemies, enemyTexArray, tilesize
+        EndDrawing()
     elif screenId == 2:
         if GetMousePosition().in(makevec2(143, 145), makevec2(56, 90), makevec2(143, 38)):
             if IsMouseButtonReleased(MOUSE_LEFT_BUTTON): screenId = 0
