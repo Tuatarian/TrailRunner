@@ -310,7 +310,7 @@ proc cellAutomaton(iters : int, wallaciousness : int) : seq[seq[Tile]] =
 
 proc genEmap(en1chance : int, gaussMu : float = 5) : seq[seq[ETile]] =
     result = genSeqSeq(8, 13, NONE)
-    let numEnems = int gauss(5, 1)
+    let numEnems = int gauss(gaussMu, 1)
     var elocs : seq[Vector2]
     for i in 0..<numEnems:
         let weight = rand(100)
@@ -334,7 +334,10 @@ proc genEmap(en1chance : int, gaussMu : float = 5) : seq[seq[ETile]] =
 proc genMap(iters, wallaciousness : int, goalLoc : Vector2 = makevec2(-1, -1)) : seq[seq[Tile]] =
     result = cellAutomaton(iters, wallaciousness)
     if goalLoc.x == -1:
-        result[rand(result.len - 1), rand(result[0].len - 1)] = GOAL
+        var lven = makevec2(rand(result.len - 1), rand(result[0].len - 1))
+        while lven == makevec2(0, 0):
+            lven = makevec2(rand(result.len - 1), rand(result[0].len - 1))
+        result[lven] = GOAL
     else: result[invert goalLoc] = GOAL
     result[0, 0] = GRND
 
@@ -534,6 +537,7 @@ while not WindowShouldClose():
         # Check if player has reached the end goal
         if plr.npos == lvenloc:
             plr.won = true
+            PlaySound winOgg
 
         if plr.won:
             deathTimer = 0
@@ -547,9 +551,17 @@ while not WindowShouldClose():
                     map = genMap(25, 30)
                     lvenloc = findFromMap map
                 elif tutstage == 3:
+                    emap = genSeqSeq(8, 13, NONE)
                     map = genMap(25, 30)
+                    let numEnems = 4
+                    var elocs : seq[Vector2]
+                    for i in 0..<numEnems:
+                        var pos = makevec2(rand 7, rand 12)
+                        while pos in elocs and pos != makevec2(0, 0):
+                            pos = makevec2(rand 7, rand 12)
+                        emap[pos] = EN2SPWN
+                    emap[0, 0] = NONE
                     lvenloc = findFromMap map
-                    emap = genEmap(80, 4)
                     (elocs, etypes) = findFromEmap emap
                     plr.pos = makevec2(0, 0); plr.npos = makevec2(0, 0); plr.canMove = true
                     enemies = @[]
@@ -559,8 +571,47 @@ while not WindowShouldClose():
                         enemies[i].pos = elocs[i]
                         enemies[i].npos = elocs[i]
                 elif tutstage == 4:
+                    emap = genSeqSeq(8, 13, NONE)
+                    map = genMap(25, 30)
+                    let numEnems = 3
+                    var elocs : seq[Vector2]
+                    for i in 0..<numEnems:
+                        var pos = makevec2(rand 7, rand 12)
+                        while pos in elocs and pos != makevec2(0, 0):
+                            pos = makevec2(rand 7, rand 12)
+                        emap[pos] = EN1SPWN
+                    emap[0, 0] = NONE
+                    lvenloc = findFromMap map
+                    (elocs, etypes) = findFromEmap emap
+                    plr.pos = makevec2(0, 0); plr.npos = makevec2(0, 0); plr.canMove = true
+                    enemies = @[]
+                    for i, loc in elocs.pairs:
+                        enemies.add(Enemy(pos : loc, npos : loc, typeId : etypes[i]))
+                    for i in 0..<enemies.len:
+                        enemies[i].pos = elocs[i]
+                        enemies[i].npos = elocs[i]
+                elif tutstage == 5:
+                    emap = genEmap(80, 4)
+                    map = genMap(25, 30)
+                    lvenloc = findFromMap map
+                    (elocs, etypes) = findFromEmap emap
+                    enemies = @[]
+                    for i, loc in elocs.pairs:
+                        enemies.add(Enemy(pos : loc, npos : loc, typeId : etypes[i]))
+                    for i in 0..<enemies.len:
+                        enemies[i].pos = elocs[i]
+                        enemies[i].npos = elocs[i]
+                elif tutstage == 6:
+                    map = genSeqSeq(8, 13, GRND)
+                    lvenloc = makevec2(rand 7, rand 12)
+                    while lvenloc == makevec2(0, 0):
+                        lvenloc = makevec2(rand 7, rand 12)
+                    map[rand 7, rand 12] = GOAL
+                    lvenloc = findFromMap map
+                    emap = genSeqSeq(8, 30, NONE)
+                    enemies = @[]
+                elif tutstage == 7:
                     escache = true
-                PlaySound winOgg
                 plr.pos = makevec2(0, 0)
                 plr.npos = makevec2(0, 0)
                 plr.canMove = true
@@ -571,24 +622,14 @@ while not WindowShouldClose():
         if not plr.canMove and plr.dead:
             if deathTimer == 5:
                 PlaySound loseOgg
-                map = genMap(25, 30)
-                lvenloc = findFromMap map
-                emap = genEmap(80, 4)
-                plr.won = false
+                tutstage += -1
                 plr.dead = false
-                plr.canMove = true
-                (elocs, etypes) = findFromEmap emap
-                plr.pos = makevec2(0, 0); plr.npos = makevec2(0, 0); plr.canMove = true
-                enemies = @[]
-                for i, loc in elocs.pairs:
-                    enemies.add(Enemy(pos : loc, npos : loc, typeId : etypes[i]))
-                for i in 0..<enemies.len:
-                    enemies[i].pos = elocs[i]
-                    enemies[i].npos = elocs[i]
+                winTimer = 7
                 deathTimer = 0
+                plr.won = true
             deathTimer += 1
 
-        if enemies.mapIt(it.pos == plr.pos).foldl(a or b) and tutstage == 3:
+        if tutstage >= 3 and tutstage < 6 and enemies.mapIt(it.pos == plr.pos).foldl(a or b):
             plr.canMove = false
             plr.dead = true
 
@@ -601,6 +642,34 @@ while not WindowShouldClose():
         playerAnim plr
         enemyAnim enemies
 
+        BeginDrawing()
+        renderMap map, tileTexTable, wallTexTable, tilesize
+        # renderTrail plrPosSeq, trailTex, tilesize
+        drawTexCenteredFromGrid playerTex, plr.pos, tilesize, WHITE
+        if tutstage >= 3 and tutstage < 6: renderEnemies enemies, enemyTexArray, tilesize
+        if tutstage == 0:
+            drawTextCenteredX "Arrow keys to move", screenWidth div 2 + 3, 53, 80, RED
+            drawTextCenteredX "Arrow keys to move", screenWidth div 2, 50, 80, WHITE
+        if tutstage == 1:
+            drawTextCenteredX "These are walls", screenWidth div 2 + 3, 53, 80, RED
+            drawTextCenteredX "These are walls", screenWidth div 2, 50, 80, WHITE
+        if tutstage == 2:
+            drawTextCenteredX "Press R to move them", screenWidth div 2 + 3, 53, 80, RED
+            drawTextCenteredX "Press R to move them", screenWidth div 2, 50, 80, WHITE
+        if tutstage == 3:
+            drawTextCenteredX "These enemies move randomly", screenWidth div 2 - 40, 53, 80, RED
+            drawTextCenteredX "These enemies move randomly", screenWidth div 2 - 43, 50, 80, WHITE
+        if tutstage == 4:
+            drawTextCenteredX "These enemies move optimally", screenWidth div 2 - 40, 53, 80, RED
+            drawTextCenteredX "These enemies move optimally", screenWidth div 2 - 43, 50, 80, WHITE
+        if tutstage == 5:
+            drawTextCenteredX "Press X to waste a turn", screenWidth div 2 + 3, 53, 80, RED
+            drawTextCenteredX "Press X to waste a turn", screenWidth div 2, 50, 80, WHITE
+        if tutstage == 6:
+            drawTextCenteredX "Hope you enjoy!", screenWidth div 2 + 3, 53, 80, RED
+            drawTextCenteredX "Hope you enjoy!", screenWidth div 2, 50, 80, WHITE
+        EndDrawing()
+
         if escache:
             screenId = 0
             currentlv = 0
@@ -611,24 +680,6 @@ while not WindowShouldClose():
             tutstage = 0
             rcache = false
 
-        BeginDrawing()
-        renderMap map, tileTexTable, wallTexTable, tilesize
-        # renderTrail plrPosSeq, trailTex, tilesize
-        drawTexCenteredFromGrid playerTex, plr.pos, tilesize, WHITE
-        if tutstage == 3: renderEnemies enemies, enemyTexArray, tilesize
-        if tutstage == 0:
-            drawTextCenteredX "Arrow keys to move", screenWidth div 2 + 3, 53, 80, RED
-            drawTextCenteredX "Arrow keys to move", screenWidth div 2, 50, 80, WHITE
-        if tutstage == 1:
-            drawTextCenteredX "Those are walls", screenWidth div 2 + 3, 53, 80, RED
-            drawTextCenteredX "Those are walls", screenWidth div 2, 50, 80, WHITE
-        if tutstage == 2:
-            drawTextCenteredX "Press R to swap level", screenWidth div 2 + 3, 53, 80, RED
-            drawTextCenteredX "Press R to swap level", screenWidth div 2, 50, 80, WHITE
-        if tutstage == 3:
-            drawTextCenteredX "Don't run into an enemy", screenWidth div 2 + 3, 53, 80, RED
-            drawTextCenteredX "Don't run into an enemy", screenWidth div 2, 50, 80, WHITE           
-        EndDrawing()
     elif screenId == 2:
         if GetMousePosition().in(makevec2(143, 145), makevec2(56, 90), makevec2(143, 38)):
             if IsMouseButtonReleased(MOUSE_LEFT_BUTTON): screenId = 0
