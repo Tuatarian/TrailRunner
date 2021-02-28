@@ -24,6 +24,8 @@ type
         GRND, WALL, GOAL
     ETile = enum
         NONE, PLRSPWN, EN1SPWN, EN2SPWN
+    Screens = enum
+        TUT, MEN, GAM, SCOR
 
     # --------------------------- #
     #       Grid Management       #
@@ -156,22 +158,22 @@ proc selectRandomDir[T](map : seq[seq[T]], start : Vector2) : Vector2 =
     if weight < 25:
         var nposcache = start + makevec2(0, -1)
         if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL and map[invert nposcache] != GOAL:
-            result = nposcache
+            return nposcache
         else: weight += 25
     if weight < 50:
         var nposcache = start + makevec2(0, 1)
         if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL and map[invert nposcache] != GOAL:
-            result = nposcache
+            return nposcache
         else: weight += 25
     if weight < 75:
         var nposcache = start + makevec2(1, 0)
         if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL and map[invert nposcache] != GOAL:
-            result = nposcache
+            return nposcache
         else: weight += 25
     if weight <= 100:
         var nposcache = start + makevec2(-1, 0)
         if nposcache == anticlamp(clamp(nposcache, makevec2(map[1].len - 1, map.len - 1)), makevec2(0, 0)) and map[invert nposcache] != WALL and map[invert nposcache] != GOAL:
-            result = nposcache
+            return nposcache
         else: result = start
 
 proc enemyAnim(enemies : var seq[Enemy]) =
@@ -209,6 +211,7 @@ proc moveEnemT1(enemies : var seq[Enemy], plr : Player, map : seq[seq[Tile]]) =
                     enemies[i].npos = nposcache
         else:
             enemies[i].npos = map.selectRandomDir(enemies[i].pos)
+        echo enemies[i].npos
 
 proc moveEnemT2(enemies : var seq[Enemy], plr : Player, map : seq[seq[Tile]]) =
     let target = plr.pos
@@ -221,8 +224,10 @@ proc moveEnemT2(enemies : var seq[Enemy], plr : Player, map : seq[seq[Tile]]) =
                     enemies[i].npos = tarpath[1]
                 if weight < 46: 
                     enemies[i].npos = map.selectRandomDir(enemies[i].pos)
-                
+            else: 
+                enemies[i].npos = map.selectRandomDir(enemies[i].pos)
         enemies[i].npos = round enemies[i].npos
+        echo enemies[i].npos
 
     # -------------------------- #
     #       Map Management       #
@@ -315,7 +320,7 @@ proc genEmap(en1chance : int, gaussMu : float = 5) : seq[seq[ETile]] =
     for i in 0..<numEnems:
         let weight = rand(100)
         var pos = makevec2(rand 7, rand 12)
-        while pos in elocs and pos != makevec2(0, 0):
+        while pos in elocs or pos in makerect(0, 0, 1, 1):
             pos = makevec2(rand 7, rand 12)
         if i == 0:
             result[pos] = EN2SPWN
@@ -365,10 +370,15 @@ const
     tilesize = 96
     screenHeight = 768
     screenWidth = 1248
+    rScreenWidth = 1920
+    rScreenHeight = 1080
+    marginX =(rScreenWidth - screenWidth) div 2
+    marginY =(rScreenHeight - screenHeight) div 2
     numTilesVec = makevec2(screenWidth div tilesize, screenHeight div tilesize)
     vol = 0.75
 
-InitWindow screenWidth, screenHeight, "TrailRun"
+InitWindow rScreenWidth, rScreenHeight, "TrailRun"
+SetWindowIcon LoadImage "assets/sprites/Player.png"
 SetTargetFPS 60
 InitAudioDevice()
 SetMasterVolume vol
@@ -377,17 +387,17 @@ let
     playerTex = LoadTexture "assets/sprites/Player.png"
     tileTexTable = toTable {GRND : LoadTexture "assets/sprites/BaseTile.png", GOAL : LoadTexture "assets/sprites/LvlEndPortal.png"}
     trailTex = LoadTexture "assets/sprites/WalkedTile.png"
-    enemyTexArray = [LoadTexture "assets/sprites/Enemy1.png", LoadTexture "assets/sprites/Enemy2.png"]
+    enemyTexArray = [LoadTexture "assets/sprites/Enemy2.png", LoadTexture "assets/sprites/Enemy1.png"]
     moveOgg = LoadSound "assets/sounds/Move.ogg"
     winOgg = LoadSound "assets/sounds/GenericNotify.ogg"
     loseOgg = LoadSound "assets/sounds/Error.ogg"
     genOgg = LoadSound "assets/sounds/Confirmation.ogg"
-    cogTex = LoadTexture "assets/sprites/settingsicon.png"
 
 genOgg.SetSoundVolume 1.85
 moveOgg.SetSoundVolume 0.6
 
 var
+    fbuf = LoadRenderTexture(screenWidth, screenHeight)
     plr = Player(canMove : true)
     lastframekey = KEY_F
     plrPosSeq : seq[Vector2]
@@ -412,11 +422,12 @@ var
     musicArr = [LoadMusicStream "assets/sounds/music/NeonHighway.mp3", LoadMusicStream "assets/sounds/music/SnowyStreets.mp3", LoadMusicStream "assets/sounds/music/CrystalClear.mp3", LoadMusicStream "assets/sounds/music/RhythmOfTime.mp3", LoadMusicStream "assets/sounds/music/Cavalier.mp3", LoadMusicStream "assets/sounds/music/Athena.mp3", LoadMusicStream "assets/sounds/music/Nimbus.mp3", LoadMusicStream "assets/sounds/music/No Strings Attached.mp3", LoadMusicStream "assets/sounds/music/Kanundrum.mp3"]
     lastSong = -1
     wallTexTable : Table[string, Texture]
-    screenId = 0
+    screenId = MEN
     buttonColors = [OFFWHITE, OFFWHITE, OFFWHITE, OFFWHITE, OFFWHITE]
     hiscores : seq[int]
     escache, escache2 : bool
     tutstage : int
+    tfin : bool
 
 for i in 0..<16:
     wallTexTable[toBin(i, 4)] = LoadTexture &"assets/sprites/walls/{toBin(i, 4)}.png"
@@ -455,10 +466,13 @@ proc loadLevel(lvl : int, map : var seq[seq[Tile]], emap : var seq[seq[Etile]], 
     lvenloc = findFromMap map
 
 hiscores = readFile("hiscores.txt").splitLines().toSeq.mapIt(parseInt it).sorted(Descending)
+tfin = readFile("tfin.txt") == "true"
+if not tfin: screenId = TUT
 SetExitKey KEY_PAGE_UP
 
 while not WindowShouldClose():
     ClearBackground BGREY
+    BeginTextureMode(fbuf); ClearBackground BGREY; EndTextureMode()
 
     musicArr.iterIt(UpdateMusicStream(it))
 
@@ -472,31 +486,33 @@ while not WindowShouldClose():
     if nimp or spacecache == true:
         spacecache = false
         musicArr.iterIt(it.StopMusicStream)
-        let inx = rand(musicArr.len - 1)
-        echo inx
+        var inx = rand(musicArr.len - 1)
+        while inx == lastSong:
+            inx = rand(musicArr.len - 1)
+        lastSong = inx
         PlayMusicStream(musicArr[inx])
 
-    if screenId == 0:
-        if GetMousePosition() in makerect(makevec2(52, 313), makevec2(379, 313), makevec2(379, 451), makevec2(52, 451)):
-            if IsMouseButtonReleased(MOUSE_LEFT_BUTTON): screenId = 3
+    if screenId == MEN:
+        if (GetMousePosition() - makevec2(marginX, marginY)) in makerect(makevec2(52, 313), makevec2(379, 313), makevec2(379, 451), makevec2(52, 451)):
+            if IsMouseButtonReleased(MOUSE_LEFT_BUTTON): screenId = TUT
             buttonColors[0] = WHITE
         else: buttonColors[0] = OFFWHITE
-        if GetMousePosition() in makerect(makevec2(424, 231), makevec2(828, 231), makevec2(828, 535), makevec2(424, 535)):
+        if (GetMousePosition() - makevec2(marginX, marginY)) in makerect(makevec2(424, 231), makevec2(828, 231), makevec2(828, 535), makevec2(424, 535)):
             if IsMouseButtonReleased(MOUSE_LEFT_BUTTON):
-                screenId = 1
+                screenId = GAM
             buttonColors[1] = WHITE
         else: buttonColors[1] = OFFWHITE 
-        if GetMousePosition() in makerect(makevec2(863, 313), makevec2(1192, 313), makevec2(1192, 451), makevec2(863, 451)):
-            if IsMouseButtonReleased(MOUSE_LEFT_BUTTON): screenId = 2
+        if (GetMousePosition() - makevec2(marginX, marginY)) in makerect(makevec2(863, 313), makevec2(1192, 313), makevec2(1192, 451), makevec2(863, 451)):
+            if IsMouseButtonReleased(MOUSE_LEFT_BUTTON): screenId = SCOR
             buttonColors[2] = WHITE
         else: buttonColors[2] = OFFWHITE
-        # if GetMousePosition() in makerect(1104, 17, 128, 128):
+        # if (GetMousePosition() - makevec2(marginX, marginY)) in makerect(1104, 17, 128, 128):
         #     if IsMouseButtonReleased(MOUSE_LEFT_BUTTON):
         #         screenId = 3
         #     buttonColors[4] = WHITE
         # else: buttonColors[4] = OFFWHITE
 
-        BeginDrawing()
+        BeginTextureMode(fbuf)
         drawTriangleFan makevec2(52, 313), makevec2(52, 451), makevec2(379, 451), makevec2(379, 313), buttonColors[0]
         DrawText "Tutorial", 69, 352, 70, BGREY
         drawTriangleFan makevec2(424, 231), makevec2(828, 231), makevec2(828, 535), makevec2(424, 535), buttonColors[1]
@@ -504,11 +520,11 @@ while not WindowShouldClose():
         drawTriangleFan makevec2(863, 313), makevec2(1192, 313), makevec2(1192, 451), makevec2(863, 451), buttonColors[2]
         DrawText "Scores", 903, 352, 70, BGREY
         # DrawTexture cogTex, 1104, 17, buttonColors[4]
-        EndDrawing()
+        EndTextureMode()
 
         if escache:
             escache = false
-    elif screenId == 3:
+    elif screenId == TUT:
         if tutstage == 0:
             emap = genSeqSeq(8, 13, NONE)
             map = genSeqSeq(8, 13, GRND)
@@ -642,36 +658,17 @@ while not WindowShouldClose():
         playerAnim plr
         enemyAnim enemies
 
-        BeginDrawing()
+        BeginTextureMode(fbuf)
         renderMap map, tileTexTable, wallTexTable, tilesize
         # renderTrail plrPosSeq, trailTex, tilesize
         drawTexCenteredFromGrid playerTex, plr.pos, tilesize, WHITE
         if tutstage >= 3 and tutstage < 6: renderEnemies enemies, enemyTexArray, tilesize
-        if tutstage == 0:
-            drawTextCenteredX "Arrow keys to move", screenWidth div 2 + 3, 53, 80, RED
-            drawTextCenteredX "Arrow keys to move", screenWidth div 2, 50, 80, WHITE
-        if tutstage == 1:
-            drawTextCenteredX "These are walls", screenWidth div 2 + 3, 53, 80, RED
-            drawTextCenteredX "These are walls", screenWidth div 2, 50, 80, WHITE
-        if tutstage == 2:
-            drawTextCenteredX "Press R to move them", screenWidth div 2 + 3, 53, 80, RED
-            drawTextCenteredX "Press R to move them", screenWidth div 2, 50, 80, WHITE
-        if tutstage == 3:
-            drawTextCenteredX "These enemies move randomly", screenWidth div 2 - 40, 53, 80, RED
-            drawTextCenteredX "These enemies move randomly", screenWidth div 2 - 43, 50, 80, WHITE
-        if tutstage == 4:
-            drawTextCenteredX "These enemies move optimally", screenWidth div 2 - 40, 53, 80, RED
-            drawTextCenteredX "These enemies move optimally", screenWidth div 2 - 43, 50, 80, WHITE
-        if tutstage == 5:
-            drawTextCenteredX "Press X to waste a turn", screenWidth div 2 + 3, 53, 80, RED
-            drawTextCenteredX "Press X to waste a turn", screenWidth div 2, 50, 80, WHITE
-        if tutstage == 6:
-            drawTextCenteredX "Hope you enjoy!", screenWidth div 2 + 3, 53, 80, RED
-            drawTextCenteredX "Hope you enjoy!", screenWidth div 2, 50, 80, WHITE
-        EndDrawing()
+        EndTextureMode()
 
         if escache:
-            screenId = 0
+            tfin = true
+            writeFile("tfin.txt", $tfin)
+            screenId = MEN
             currentlv = 0
             loadLevel currentlv, map, emap, enemies, elocs, etypes, plr, timersToReset, lvenloc
             (score, interscore) = (0, 0)
@@ -680,14 +677,14 @@ while not WindowShouldClose():
             tutstage = 0
             rcache = false
 
-    elif screenId == 2:
-        if GetMousePosition().in(makevec2(143, 145), makevec2(56, 90), makevec2(143, 38)):
-            if IsMouseButtonReleased(MOUSE_LEFT_BUTTON): screenId = 0
+    elif screenId == SCOR:
+        if (GetMousePosition() - makevec2(marginX, marginY)).in(makevec2(143, 145), makevec2(56, 90), makevec2(143, 38)):
+            if IsMouseButtonReleased(MOUSE_LEFT_BUTTON): screenId = MEN
             buttonColors[3] = WHITE
         else: buttonColors[3] = OFFWHITE
-        if escache: screenId = 0; escache = false
+        if escache: screenId = MEN; escache = false
 
-        BeginDrawing()
+        BeginTextureMode(fbuf)
         drawTextCenteredX "High Scores", screenWidth div 2 + 3, 53, 80, RED
         drawTextCenteredX "High Scores", screenWidth div 2, 50, 80, WHITE
 
@@ -718,8 +715,8 @@ while not WindowShouldClose():
 
         drawTriangleFan(makevec2(56, 90), makevec2(145, 145), makevec2(145, 38), buttonColors[3])
 
-        EndDrawing()
-    elif screenId == 1:
+        EndTextureMode()
+    elif screenId == GAM:
         if not plr.canMove and plr.dead:
             if deathTimer == 5:
                 PlaySound loseOgg
@@ -789,14 +786,14 @@ while not WindowShouldClose():
         #       DRAW       #
         # ---------------- #
 
-        BeginDrawing()
+        BeginTextureMode(fbuf)
         renderMap map, tileTexTable, wallTexTable, tilesize
         # renderTrail plrPosSeq, trailTex, tilesize
         drawTexCenteredFromGrid playerTex, plr.pos, tilesize, WHITE
         renderEnemies enemies, enemyTexArray, tilesize
         DrawText $interscore, screenWidth - 118, 42, 40, RED
         DrawText $interscore, screenWidth - 120, 40, 40, WHITE
-        EndDrawing()
+        EndTextureMode()
 
         if escache:
             currentlv = 0
@@ -807,17 +804,48 @@ while not WindowShouldClose():
             deathTimer = 0
             rcount = 0
             escache = false
-            screenId = 0
+            screenId = MEN
     if IsKeyDown(KEY_ESCAPE):
         if not escache2:
             (escache, escache2) = (true, true)
     else: escache2= false
+    BeginDrawing()
+    DrawTexturePro(fbuf.texture, makerect(0, 0, screenWidth, -screenHeight), makerect(0, 0, screenWidth, screenHeight), makevec2(-marginX, -marginY), 0, WHITE)
+    if screenId == GAM or screenId == TUT:
+        DrawRectangleLines(marginX, marginY, screenWidth, screenHeight, WHITE)
+    if screenId == TUT:
+        if tutstage == 0:
+            drawTextCenteredX "Arrow keys to move", rScreenWidth div 2 + 2, 53, 80, RED
+            drawTextCenteredX "Arrow keys to move", rScreenWidth div 2 - 1, 50, 80, WHITE
+        if tutstage == 1:
+            drawTextCenteredX "These are walls", rScreenWidth div 2 + 2, 53, 80, RED
+            drawTextCenteredX "These are walls", rScreenWidth div 2 - 1, 50, 80, WHITE
+        if tutstage == 2:
+            drawTextCenteredX "Press R to move them", rScreenWidth div 2 + 2, 53, 80, RED
+            drawTextCenteredX "Press R to move them", rScreenWidth div 2 - 1, 50, 80, WHITE
+        if tutstage == 3:
+            drawTextCenteredX "These enemies move randomly", rScreenWidth div 2 + 2, 53, 80, RED
+            drawTextCenteredX "These enemies move randomly", rScreenWidth div 2 - 1, 50, 80, WHITE
+        if tutstage == 4:
+            drawTextCenteredX "These enemies move optimally", rScreenWidth div 2 + 2, 53, 80, RED
+            drawTextCenteredX "These enemies move optimally", rScreenWidth div 2 - 1, 50, 80, WHITE
+        if tutstage == 5:
+            drawTextCenteredX "Press X to waste a turn", rScreenWidth div 2 + 2, 53, 80, RED
+            drawTextCenteredX "Press X to waste a turn", rScreenWidth div 2 - 1, 50, 80, WHITE
+        if tutstage == 6:
+            drawTextCenteredX "Hope you enjoy!", rScreenWidth div 2 + 2, 53, 80, RED
+            drawTextCenteredX "Hope you enjoy!", rScreenWidth div 2 - 1, 50, 80, WHITE
+    if screenId == MEN:
+        drawTextCenteredX "LevelRunner", rScreenWidth div 2 + 2, 53, 100, RED
+        drawTextCenteredX "LevelRunner", rScreenWidth div 2 - 1, 50, 100, WHITE  
+    EndDrawing()
 
 for t in tileTexTable.values:
     UnloadTexture t
 for t in wallTexTable.values:
     UnloadTexture t
 UnloadTexture playertex, trailTex
+UnloadRenderTexture fbuf
 UnloadMusicStream musicArr
 CloseAudioDevice()
 UnloadSound loseOgg, moveOgg, winOgg, genOgg

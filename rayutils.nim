@@ -73,7 +73,7 @@ func drawTextCentered*(s : string, x, y, fsize : int, colour : Color) =
     DrawText s, x - tSizeVec.x.int, y - tSizeVec.y.int, fsize, colour
 
 func drawTextCenteredX*(s : string, x, y, fsize : int, colour : Color) =
-    let tSizeVec = MeasureTextEx(GetFontDefault(), s, float fsize, max(10,fsize) / 20) div 2
+    let tSizeVec = MeasureTextEx(GetFontDefault(), s, float fsize, max(20,fsize) / 10) div 2
     DrawText s, x - tSizeVec.x.int, y, fsize, colour
 
 proc int2bin*(i : int) : int =
@@ -94,6 +94,9 @@ func makerect*(x, y, w, h : int) : Rectangle =
 
 func `in`*(v : Vector2, r : Rectangle) : bool =
     return (v.x in r.x..r.x + r.width) and (v.y in r.y..r.y + r.height)
+
+func `notin`*(v : Vector2, r : Rectangle) : bool =
+    return not(v in r)
 
 func sign(v, v2, v3 : Vector2) : float =
     return (v.x - v3.x) * (v2.y - v3.y) - (v2.x - v3.x) * (v.y - v3.y)
